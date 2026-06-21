@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Natasha's Subtraction Magic ✨🦄</title>
   <meta name="description" content="A magical way to learn 2-digit subtraction with tens and ones." />
+  <meta name="theme-color" content="#fde2f3" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦄</text></svg>" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -17,35 +18,32 @@
       <span class="cloud c2"></span>
       <span class="cloud c3"></span>
     </div>
+    <div class="floaties" id="floaties" aria-hidden="true"></div>
   </div>
 
   <main class="app">
-    <!-- ============ START SCREEN ============ -->
-    <section id="screen-start" class="screen card">
-      <div class="unicorn-big" aria-hidden="true">
-        <!-- unicorn SVG injected by JS -->
-      </div>
+    <!-- ============ HOME HUB ============ -->
+    <section id="screen-home" class="screen card">
+      <div class="unicorn-big" aria-hidden="true"></div>
       <h1 class="title">Subtraction Magic</h1>
-      <p class="subtitle">Hi <span class="name">Natasha</span>! Ready to become a
-        <strong>Subtraction Unicorn</strong>? 🦄</p>
-      <p class="lead">We'll take away numbers using <b>Tens</b> and <b>Ones</b> —
-        just like in your drawing!</p>
+      <p class="subtitle">Hi <span class="name">Natasha</span>! Pick a game and become a
+        <strong>Subtraction Star</strong>! 🦄</p>
 
-      <div class="level-pick">
-        <button class="lvl-btn" data-mode="gentle">
-          <span class="lvl-emoji">🌈</span>
-          <span class="lvl-name">Start Gentle</span>
-          <span class="lvl-desc">Easy ones first, then exchanging</span>
+      <div class="progress-strip">
+        <div class="ps-item" title="Stars you have collected">⭐ <span id="home-stars">0</span></div>
+        <button class="ps-item ps-btn" id="badges-btn" title="See your badges">🏅 <span id="home-badges-count">0</span> badges</button>
+      </div>
+
+      <div class="game-grid">
+        <button class="game-card" id="play-tutor">
+          <span class="gc-emoji">🔢</span>
+          <span class="gc-name">Tens &amp; Ones</span>
+          <span class="gc-desc">Learn with tallies and circles</span>
         </button>
-        <button class="lvl-btn" data-mode="exchange">
-          <span class="lvl-emoji">✨</span>
-          <span class="lvl-name">Exchange Power</span>
-          <span class="lvl-desc">Every problem needs an exchange</span>
-        </button>
-        <button class="lvl-btn" data-mode="mixed">
-          <span class="lvl-emoji">🦄</span>
-          <span class="lvl-name">Surprise Mix</span>
-          <span class="lvl-desc">A magical mixture!</span>
+        <button class="game-card" id="play-quiz">
+          <span class="gc-emoji">⚡</span>
+          <span class="gc-name">Star Quiz</span>
+          <span class="gc-desc">Quick-fire answers, beat your best!</span>
         </button>
       </div>
 
@@ -55,10 +53,11 @@
       </label>
     </section>
 
-    <!-- ============ GAME SCREEN ============ -->
+    <!-- ============ TUTOR GAME ============ -->
     <section id="screen-game" class="screen hidden">
       <header class="game-top">
         <button class="icon-btn" id="home-btn" title="Back home">🏠</button>
+        <div class="hearts" id="hearts" title="Lives"></div>
         <div class="progress-wrap" title="Stars collected">
           <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
           <div class="star-count">⭐ <span id="star-count">0</span></div>
@@ -74,14 +73,12 @@
         <span id="big-ans" class="qmark">?</span>
       </div>
 
-      <!-- Unicorn helper + speech bubble -->
       <div class="helper">
-        <div class="unicorn-small" aria-hidden="true"></div>
+        <div class="buddy" id="buddy" aria-hidden="true">🦄</div>
         <div class="bubble" id="bubble">Let's begin! ✨</div>
       </div>
 
       <div class="board-wrap">
-        <!-- Place value chart -->
         <div class="chart" id="chart">
           <div class="chart-head">
             <div class="col-head tens-head">Tens</div>
@@ -100,7 +97,6 @@
           </div>
         </div>
 
-        <!-- Linked column / vertical form -->
         <div class="column-form" id="column-form" aria-hidden="true">
           <div class="cf-title">Number way</div>
           <table class="cf-table">
@@ -133,7 +129,59 @@
         <button class="big-btn primary hidden" id="next-btn">Next ➜</button>
       </div>
     </section>
+
+    <!-- ============ QUIZ GAME ============ -->
+    <section id="screen-quiz" class="screen hidden">
+      <header class="game-top">
+        <button class="icon-btn" id="quiz-home-btn" title="Back home">🏠</button>
+        <div class="hearts" id="quiz-hearts" title="Lives"></div>
+        <div class="quiz-progress" id="quiz-progress"></div>
+        <button class="icon-btn" id="quiz-speak-btn" title="Read aloud on/off">🔊</button>
+      </header>
+
+      <div class="helper quiz-helper">
+        <div class="buddy" id="quiz-buddy" aria-hidden="true">⚡</div>
+        <div class="bubble" id="quiz-bubble">Tap the right answer as fast as you can!</div>
+      </div>
+
+      <div class="quiz-question">
+        <span id="quiz-top">52</span>
+        <span class="minus">−</span>
+        <span id="quiz-bot">25</span>
+        <span class="eq">=</span>
+        <span class="qmark">?</span>
+      </div>
+
+      <div class="quiz-choices" id="quiz-choices"></div>
+    </section>
+
+    <!-- ============ AWARD / CERTIFICATE ============ -->
+    <section id="screen-award" class="screen hidden">
+      <div class="certificate">
+        <div class="cert-shine"></div>
+        <div class="cert-emoji" id="cert-emoji">🏆</div>
+        <div class="cert-ribbon">Certificate of Awesomeness</div>
+        <h2 class="cert-name">Natasha</h2>
+        <p class="cert-headline" id="cert-headline">You did amazing!</p>
+        <div class="cert-stats" id="cert-stats"></div>
+        <div class="cert-badges" id="cert-badges"></div>
+        <p class="cert-date" id="cert-date"></p>
+      </div>
+      <div class="controls">
+        <button class="big-btn primary" id="award-again">Play again 🦄</button>
+        <button class="big-btn ghost" id="award-home">🏠 Home</button>
+      </div>
+    </section>
   </main>
+
+  <!-- Badges modal -->
+  <div class="modal hidden" id="badge-modal">
+    <div class="modal-card">
+      <button class="modal-close" id="badge-close" title="Close">✖</button>
+      <h2 class="modal-title">My Badges 🏅</h2>
+      <div class="badge-grid" id="badge-grid"></div>
+    </div>
+  </div>
 
   <!-- Celebration layer -->
   <div class="confetti" id="confetti" aria-hidden="true"></div>

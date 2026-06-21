@@ -1,23 +1,29 @@
 "use strict";
 
 /* ===================================================================
-   Natasha's Subtraction Magic
-   2-digit subtraction taught with a Tens/Ones place-value chart.
-   Tens = tally strokes, Ones = circles, with click-to-exchange.
+   Natasha's Subtraction Magic — v2
+   - Tens & Ones tutor with adaptive guidance, hearts and exchanging
+   - Star Quiz quick-fire game
+   - On-device progress, badges and an end-of-session certificate
    =================================================================== */
 
-/* ---------- Unicorn SVG (shared) ---------- */
+/* ---------- DOM helpers ---------- */
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const plural = (n, s, p) => (n === 1 ? s : p);
+
+/* ---------- Unicorn SVG (home + certificate brand) ---------- */
 const UNICORN_SVG = `
 <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="mane" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff9ed2"/>
-      <stop offset="0.5" stop-color="#b78cff"/>
-      <stop offset="1" stop-color="#7ef0d3"/>
+      <stop offset="0" stop-color="#ff9ed2"/><stop offset="0.5" stop-color="#b78cff"/><stop offset="1" stop-color="#7ef0d3"/>
     </linearGradient>
     <linearGradient id="horn" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffe66d"/>
-      <stop offset="1" stop-color="#ffb84d"/>
+      <stop offset="0" stop-color="#ffe66d"/><stop offset="1" stop-color="#ffb84d"/>
     </linearGradient>
   </defs>
   <ellipse cx="60" cy="100" rx="34" ry="8" fill="#000" opacity="0.08"/>
@@ -40,22 +46,57 @@ const UNICORN_SVG = `
   <circle cx="64" cy="22" r="2" fill="#fff"/>
 </svg>`;
 
+/* ---------- Character cast ---------- */
+const BUDDIES = [
+  { e: "🦄", n: "Luna" }, { e: "🐉", n: "Sparky" }, { e: "🐱", n: "Mochi" },
+  { e: "🦊", n: "Pip" }, { e: "🐸", n: "Hops" }, { e: "🦕", n: "Dino" },
+  { e: "🐙", n: "Inky" }, { e: "🐼", n: "Bao" }, { e: "🦁", n: "Leo" },
+  { e: "🐰", n: "Cloud" }, { e: "🐢", n: "Shelly" }, { e: "🦋", n: "Flutter" }
+];
+
+/* ---------- Badges ---------- */
+const BADGES = [
+  { id: "first-star", e: "⭐", n: "First Star", d: "Earn your very first star" },
+  { id: "exchanger", e: "✨", n: "Exchange Expert", d: "Solve an exchanging problem" },
+  { id: "flawless", e: "💯", n: "Flawless", d: "Finish a round with all hearts" },
+  { id: "collector", e: "🌟", n: "Star Collector", d: "Collect 15 stars in total" },
+  { id: "graduate", e: "🎓", n: "Graduate", d: "Finish a Tens & Ones session" },
+  { id: "quickthinker", e: "⚡", n: "Quick Thinker", d: "Score 6+ in Star Quiz" },
+  { id: "soloist", e: "🦸", n: "On My Own", d: "Solve a round with no hints showing" }
+];
+
+/* ---------- On-device storage ---------- */
+const Store = {
+  KEY: "natasha-math-v1",
+  data: { totalStars: 0, sessions: 0, quizPlays: 0, quizBest: 0, badges: {} },
+  load() {
+    try { const s = localStorage.getItem(this.KEY); if (s) this.data = Object.assign(this.data, JSON.parse(s)); }
+    catch (e) { /* ignore */ }
+  },
+  save() { try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); } catch (e) { /* ignore */ } },
+  addStars(n) { this.data.totalStars += n; this.save(); },
+  hasBadge(id) { return !!this.data.badges[id]; },
+  earn(id) { if (!this.data.badges[id]) { this.data.badges[id] = Date.now(); this.save(); return true; } return false; },
+  badgeCount() { return Object.keys(this.data.badges).length; }
+};
+
+/* badges earned during the current session (shown on the certificate) */
+let sessionNewBadges = [];
+function earnBadge(id) {
+  if (Store.earn(id)) {
+    const def = BADGES.find(b => b.id === id);
+    if (def && !sessionNewBadges.find(b => b.id === id)) sessionNewBadges.push(def);
+  }
+}
+
 /* ---------- Tiny WebAudio sound kit ---------- */
 const Sound = (() => {
   let ctx = null;
-  function ac() {
-    if (!ctx) {
-      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
-      catch (e) { ctx = null; }
-    }
-    return ctx;
-  }
+  function ac() { if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { ctx = null; } } return ctx; }
   function tone(freq, start, dur, type = "sine", gain = 0.12) {
     const c = ac(); if (!c) return;
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = type; o.frequency.value = freq;
-    o.connect(g); g.connect(c.destination);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq; o.connect(g); g.connect(c.destination);
     const t = c.currentTime + start;
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(gain, t + 0.02);
@@ -67,469 +108,590 @@ const Sound = (() => {
     cross() { tone(300, 0, 0.1, "square", 0.07); },
     exchange() { tone(440, 0, 0.12, "sine"); tone(660, 0.08, 0.14, "sine"); },
     step() { tone(587, 0, 0.12, "triangle"); tone(784, 0.08, 0.16, "triangle"); },
-    win() {
-      const notes = [523, 659, 784, 1047];
-      notes.forEach((f, i) => tone(f, i * 0.12, 0.22, "triangle", 0.13));
-    },
+    oops() { tone(220, 0, 0.18, "sawtooth", 0.08); tone(160, 0.1, 0.2, "sawtooth", 0.07); },
+    win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.12, 0.22, "triangle", 0.13)); },
+    fanfare() { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.13, 0.26, "triangle", 0.13)); },
     resume() { const c = ac(); if (c && c.state === "suspended") c.resume(); }
   };
 })();
 
 /* ---------- Speech ---------- */
 const Speech = {
-  on: true,
-  voice: null,
+  on: true, voice: null,
   init() {
     if (!("speechSynthesis" in window)) return;
-    const pick = () => {
+    const pick2 = () => {
       const vs = window.speechSynthesis.getVoices();
       this.voice = vs.find(v => /female|zira|samantha|karen|google uk english female/i.test(v.name))
-        || vs.find(v => /en-GB/i.test(v.lang))
-        || vs.find(v => /^en/i.test(v.lang)) || vs[0] || null;
+        || vs.find(v => /en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || vs[0] || null;
     };
-    pick();
-    window.speechSynthesis.onvoiceschanged = pick;
+    pick2();
+    window.speechSynthesis.onvoiceschanged = pick2;
   },
   say(text) {
     if (!this.on || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/[✨🦄🌈⭐💡➜·−?]/g, ""));
+    const u = new SpeechSynthesisUtterance(text.replace(/[^\w\s.,!?'-]/g, " "));
     if (this.voice) u.voice = this.voice;
     u.rate = 0.96; u.pitch = 1.25;
     window.speechSynthesis.speak(u);
-  }
-};
-
-/* ---------- DOM helpers ---------- */
-const $ = (id) => document.getElementById(id);
-const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
-
-/* ---------- Game state ---------- */
-const TOTAL_ROUNDS = 10;
-const State = {
-  mode: "gentle",
-  round: 0,
-  stars: 0,
-  top: 0, bottom: 0,
-  tT: 0, tO: 0, bT: 0, bO: 0,
-  needExchange: false,
-  exchanged: false,
-  onesToCross: 0, tensToCross: 0,
-  onesCrossed: 0, tensCrossed: 0,
-  phase: "build",
-  busy: false
+  },
+  cancel() { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); }
 };
 
 /* ---------- Problem generation ---------- */
-function makeProblem(mode, round) {
-  // Decide whether this round needs an exchange (borrow).
-  let wantExchange;
-  if (mode === "exchange") {
-    wantExchange = true;
-  } else if (mode === "gentle") {
-    // first three rounds easy (no exchange), then introduce exchanging
-    wantExchange = round >= 3 ? (round % 2 === 1) : false;
-    if (round >= 6) wantExchange = Math.random() < 0.6;
-  } else { // mixed
-    wantExchange = Math.random() < 0.5;
-  }
-
+function makeProblem(wantExchange) {
   for (let tries = 0; tries < 400; tries++) {
-    const tT = rnd(2, 9);          // top tens 2..9
-    const tO = rnd(0, 9);          // top ones
-    const bT = rnd(1, tT);         // bottom tens <= top tens (no negative result)
+    const tT = rnd(2, 9), tO = rnd(0, 9), bT = rnd(1, tT);
     let bO;
     if (wantExchange) {
-      if (tO === 9) continue;      // need bO > tO, impossible if tO=9
-      bO = rnd(tO + 1, 9);         // bottom ones bigger -> must exchange
-      if (bT > tT - 1) continue;   // after borrowing one ten, tens must not go negative
+      if (tO === 9) continue;
+      bO = rnd(tO + 1, 9);
+      if (bT > tT - 1) continue;
     } else {
-      bO = rnd(0, tO);             // bottom ones <= top ones -> no exchange
+      bO = rnd(0, tO);
     }
-    const top = tT * 10 + tO;
-    const bottom = bT * 10 + bO;
+    const top = tT * 10 + tO, bottom = bT * 10 + bO;
     if (top <= bottom) continue;
-    if (bottom < 10) continue;     // keep it 2-digit minus 2-digit
+    if (bottom < 10) continue;
     return { top, bottom, tT, tO, bT, bO, needExchange: wantExchange };
   }
-  // fallback
   return { top: 85, bottom: 79, tT: 8, tO: 5, bT: 7, bO: 9, needExchange: true };
 }
-function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 
-/* ---------- Build a round ---------- */
-function startRound() {
-  const p = makeProblem(State.mode, State.round);
-  Object.assign(State, {
-    top: p.top, bottom: p.bottom,
-    tT: p.tT, tO: p.tO, bT: p.bT, bO: p.bO,
-    needExchange: p.needExchange,
-    exchanged: false,
-    onesToCross: p.bO, tensToCross: p.bT,
-    onesCrossed: 0, tensCrossed: 0,
-    phase: "build",
-    busy: false
+/* ===================================================================
+   SCREEN MANAGEMENT
+   =================================================================== */
+const App = { lastGame: "tutor" };
+function show(id) {
+  ["screen-home", "screen-game", "screen-quiz", "screen-award"].forEach(s => $(s).classList.add("hidden"));
+  $(id).classList.remove("hidden");
+  window.scrollTo(0, 0);
+}
+
+/* ---------- Bubble + speech ---------- */
+function bubble(targetId, text, kind) {
+  const b = $(targetId);
+  b.textContent = text;
+  b.classList.toggle("cheer", kind === "cheer");
+  b.classList.toggle("oops", kind === "oops");
+  Speech.say(text);
+}
+
+/* ===================================================================
+   TENS & ONES TUTOR
+   =================================================================== */
+const ROUNDS = 5;
+const T = {
+  round: 0, bias: 0, sessionStars: 0, perfects: 0,
+  top: 0, bottom: 0, tT: 0, tO: 0, bT: 0, bO: 0,
+  needExchange: false, exchanged: false,
+  onesToCross: 0, tensToCross: 0, onesCrossed: 0, tensCrossed: 0,
+  phase: "build", busy: false, hearts: 3, guidance: "guide",
+  hadMistake: false, usedHint: false, buddy: BUDDIES[0]
+};
+
+function guidanceFor(i) {
+  const score = i + T.bias;
+  if (score < 2) return "guide";
+  if (score < 4) return "coach";
+  return "solo";
+}
+
+function startTutor() {
+  Sound.resume();
+  App.lastGame = "tutor";
+  sessionNewBadges = [];
+  T.round = 0; T.sessionStars = 0; T.perfects = 0;
+  T.bias = Store.data.sessions >= 5 ? 2 : (Store.data.sessions >= 2 ? 1 : 0);
+  $("star-count").textContent = "0";
+  $("progress-fill").style.width = "0%";
+  show("screen-game");
+  startTutorRound();
+}
+
+function startTutorRound() {
+  const wantExchange = T.round === 0 ? false : Math.random() < 0.6;
+  const p = makeProblem(wantExchange);
+  Object.assign(T, {
+    top: p.top, bottom: p.bottom, tT: p.tT, tO: p.tO, bT: p.bT, bO: p.bO,
+    needExchange: p.needExchange, exchanged: false,
+    onesToCross: p.bO, tensToCross: p.bT, onesCrossed: 0, tensCrossed: 0,
+    phase: "build", busy: false, hearts: 3, hadMistake: false, usedHint: false,
+    guidance: guidanceFor(T.round), buddy: pick(BUDDIES)
   });
 
-  // banner
+  $("buddy").textContent = T.buddy.e;
+  renderHearts("hearts", T.hearts);
+
   $("big-top").textContent = p.top;
   $("big-bot").textContent = p.bottom;
-  const ans = $("big-ans");
-  ans.textContent = "?"; ans.className = "qmark";
+  const ans = $("big-ans"); ans.textContent = "?"; ans.className = "qmark";
+  document.querySelector(".problem-banner").classList.remove("solved-banner");
 
-  // column form
   setText("cf-tt", p.tT); setText("cf-to", p.tO);
   setText("cf-ot", p.bT); setText("cf-oo", p.bO);
   setText("cf-bt", ""); setText("cf-bo", "");
   setText("cf-rt", ""); setText("cf-ro", "");
-  $("cf-to").className = "cf-cell"; $("cf-tt").className = "cf-cell";
+  $("cf-tt").className = "cf-cell"; $("cf-to").className = "cf-cell";
 
-  // answer cells
   $("ans-tens").textContent = "·"; $("ans-tens").className = "ans-tens";
   $("ans-ones").textContent = "·"; $("ans-ones").className = "ans-ones";
 
-  // progress
   $("next-btn").classList.add("hidden");
   $("hint-btn").classList.remove("hidden");
 
-  renderTens();
-  renderOnes();
-  buildIntro();
+  renderTens(); renderOnes();
+  introRound();
 }
-
 function setText(id, t) { const e = $(id); if (e) e.textContent = t; }
 
-/* ---------- Rendering ---------- */
-function renderTens() {
-  const col = $("tens-col");
-  col.innerHTML = "";
-  for (let i = 0; i < State.tT; i++) {
-    const t = el("div", "ten spawn");
-    if (i % 5 === 0 && i !== 0) t.classList.add("group-break");
-    t.dataset.idx = i;
-    t.addEventListener("click", () => onTenClick(t, i));
-    col.appendChild(t);
-    setTimeout(() => t.classList.remove("spawn"), 400);
+function renderHearts(id, n) {
+  const box = $(id); box.innerHTML = "";
+  for (let i = 0; i < 3; i++) {
+    const h = el("span", "heart" + (i >= n ? " lost" : ""));
+    h.textContent = "❤️";
+    box.appendChild(h);
   }
 }
 
-function renderOnes() {
-  const col = $("ones-col");
-  col.innerHTML = "";
-  for (let i = 0; i < State.tO; i++) addOne(col, false);
+function renderTens() {
+  const col = $("tens-col"); col.innerHTML = "";
+  for (let i = 0; i < T.tT; i++) {
+    const t = el("div", "ten spawn");
+    if (i % 5 === 0 && i !== 0) t.classList.add("group-break");
+    t.addEventListener("click", () => handleTenTap(t));
+    col.appendChild(t);
+    setTimeout(() => t.classList.remove("spawn"), 380);
+  }
 }
-
+function renderOnes() {
+  const col = $("ones-col"); col.innerHTML = "";
+  for (let i = 0; i < T.tO; i++) addOne(col, false);
+}
 function addOne(col, fromExchange) {
-  const o = el("div", "one spawn" + (fromExchange ? " from-exchange" : ""));
-  o.addEventListener("click", () => onOneClick(o));
+  const o = el("div", "one " + (fromExchange ? "fly-in from-exchange" : "spawn"));
+  o.addEventListener("click", () => handleOneTap(o));
   col.appendChild(o);
-  setTimeout(() => o.classList.remove("spawn"), 400);
+  setTimeout(() => o.classList.remove("spawn", "fly-in"), 520);
   return o;
 }
 
-/* ---------- Phase flow ---------- */
-function buildIntro() {
-  const msg = `Let's work out ${State.top} take away ${State.bottom}. ` +
-    `We need to take away ${State.bO} ${one(State.bO, "one", "ones")} ` +
-    `and ${State.bT} ${one(State.bT, "ten", "tens")}.`;
-  bubble(msg);
-  setTimeout(decideOnesPhase, 600);
-}
-function one(n, s, p) { return n === 1 ? s : p; }
-
-function decideOnesPhase() {
-  if (State.bO > State.tO && !State.exchanged) {
-    // not enough ones -> must exchange
-    State.phase = "exchange";
-    bubble(`Oops! We only have ${State.tO} ${one(State.tO, "one", "ones")}, ` +
-      `but we must take away ${State.bO}. Tap a glowing Ten to swap it for 10 ones! ✨`);
-    markTensTappable(true);
-    markOnesTappable(false);
+/* ----- Round intro & phase routing ----- */
+function introRound() {
+  if (T.guidance === "guide") {
+    bubble("bubble", `Hi, I'm ${T.buddy.n}! Let's work out ${T.top} take away ${T.bottom}. ` +
+      `We start with the Ones.`);
+  } else if (T.guidance === "coach") {
+    bubble("bubble", `${T.buddy.n} here! Solve ${T.top} − ${T.bottom}. Start with the Ones — you can do it!`);
   } else {
-    State.phase = "crossOnes";
-    if (State.onesToCross === 0) {
-      bubble(`We take away 0 ones, so all ${State.tO} ${one(State.tO, "one", "ones")} stay. Now let's do the Tens!`);
-      finishOnes();
+    bubble("bubble", `Your turn! Solve ${T.top} − ${T.bottom}. I'll just watch! 🌟`);
+  }
+  setTimeout(routePhase, 700);
+}
+
+function routePhase() {
+  if (T.bO > T.tO && !T.exchanged) {
+    T.phase = "exchange";
+    if (T.guidance === "guide") {
+      bubble("bubble", `We only have ${T.tO} ${plural(T.tO, "one", "ones")}, but need to take ${T.bO}. ` +
+        `Tap a glowing Ten to swap it for 10 ones! ✨`);
+    } else if (T.guidance === "coach") {
+      bubble("bubble", `Hmm, not enough ones to take ${T.bO} away. What could we do? 🤔`);
+    }
+  } else {
+    T.phase = "crossOnes";
+    if (T.onesToCross === 0) {
+      if (T.guidance === "guide") bubble("bubble", `We take away 0 ones, so they all stay. Now the Tens!`);
+      finishOnesPhase();
       return;
     }
-    bubble(`Great! Now tap ${State.onesToCross} ${one(State.onesToCross, "one", "ones")} to cross ${one(State.onesToCross, "it", "them")} out.`);
-    markOnesTappable(true);
-    markTensTappable(false);
+    if (T.guidance === "guide") {
+      bubble("bubble", `Now tap ${T.onesToCross} ${plural(T.onesToCross, "one", "ones")} to cross out.`);
+    } else if (T.guidance === "coach") {
+      bubble("bubble", `Take away the ones now.`);
+    }
+  }
+  updateGlow();
+}
+
+function updateGlow() {
+  document.querySelectorAll("#tens-col .ten, #ones-col .one").forEach(n => { n.classList.remove("tappable"); n.classList.add("live"); });
+  if (T.guidance !== "guide") return;
+  if (T.phase === "exchange") {
+    document.querySelectorAll("#tens-col .ten:not(.crossed)").forEach(t => t.classList.add("tappable"));
+  } else if (T.phase === "crossOnes") {
+    document.querySelectorAll("#ones-col .one:not(.crossed)").forEach(o => o.classList.add("tappable"));
+  } else if (T.phase === "crossTens") {
+    document.querySelectorAll("#tens-col .ten:not(.crossed)").forEach(t => t.classList.add("tappable"));
   }
 }
 
-function onTenClick(node, idx) {
-  if (State.busy) return;
-  if (State.phase === "exchange") {
-    if (State.exchanged || node.classList.contains("crossed")) return;
-    // exchange this ten for 10 ones
-    State.busy = true;
+/* ----- Taps ----- */
+function handleTenTap(node) {
+  if (T.busy) return;
+  if (node.classList.contains("crossed")) return;
+  if (T.phase === "exchange") doExchange(node);
+  else if (T.phase === "crossTens") doCrossTen(node);
+  else wrongTap(node, "ten");
+}
+function handleOneTap(node) {
+  if (T.busy) return;
+  if (node.classList.contains("crossed")) return;
+  if (T.phase === "crossOnes") doCrossOne(node);
+  else wrongTap(node, "one");
+}
+
+function wrongTap(node, kind) {
+  node.classList.add("wrong");
+  setTimeout(() => node.classList.remove("wrong"), 420);
+  if (T.guidance === "guide") {
+    // gentle, no penalty for the youngest level
+    if (T.phase === "exchange") bubble("bubble", `Not that one — tap a glowing Ten to swap it. ✨`);
+    else if (T.phase === "crossOnes") bubble("bubble", `Cross out the Ones (the circles).`);
+    else if (T.phase === "crossTens") bubble("bubble", `Cross out the Tens (the tall bars).`);
+    return;
+  }
+  loseHeart(kind);
+}
+
+function loseHeart(kind) {
+  T.hearts--; T.hadMistake = true;
+  Sound.oops();
+  const box = $("hearts");
+  const live = box.querySelectorAll(".heart:not(.lost)");
+  const last = live[live.length - 1];
+  if (last) { last.classList.add("ping"); setTimeout(() => { last.classList.add("lost"); last.classList.remove("ping"); }, 200); }
+  let msg;
+  if (T.phase === "exchange") msg = "Oops! Not enough ones — we must exchange a Ten first.";
+  else if (T.phase === "crossOnes") msg = "Oops! We're taking away Ones right now.";
+  else if (T.phase === "crossTens") msg = "Oops! We're taking away Tens right now.";
+  else msg = "Oops, try again!";
+  if (T.hearts <= 0) { bubble("bubble", "That was a tricky one! Let me show you the answer.", "oops"); setTimeout(() => failRound(), 900); }
+  else { bubble("bubble", msg + ` ${T.hearts} ${plural(T.hearts, "heart", "hearts")} left.`, "oops"); }
+}
+
+function doExchange(node) {
+  T.busy = true;
+  earnBadge("exchanger");
+  node.classList.add("exchanging");
+  document.querySelectorAll("#tens-col .ten").forEach(t => t.classList.remove("tappable"));
+  // floating +10 from the ten's position
+  floatPlus(node);
+  setTimeout(() => {
     node.classList.add("exchanged", "crossed");
-    node.classList.remove("tappable");
-    State.exchanged = true;
+    node.classList.remove("exchanging");
+    T.exchanged = true;
     Sound.exchange();
-    // show borrow in column form
     setText("cf-bo", "1");
     $("cf-tt").classList.add("cf-strike");
-    setText("cf-bt", String(State.tT - 1));
-    bubble("Abracadabra! ✨ One Ten becomes 10 Ones!");
-    markTensTappable(false);
-    // add 10 ones with a little stagger
+    setText("cf-bt", String(T.tT - 1));
+    bubble("bubble", "Abracadabra! ✨ One Ten becomes 10 Ones!");
     const col = $("ones-col");
     let added = 0;
     const timer = setInterval(() => {
-      addOne(col, true);
-      Sound.pop();
+      addOne(col, true); Sound.pop();
       if (++added >= 10) {
         clearInterval(timer);
         setTimeout(() => {
-          State.busy = false;
-          State.phase = "crossOnes";
-          bubble(`Now we have ${State.tO + 10} ones! Tap ${State.onesToCross} of them to cross out.`);
-          markOnesTappable(true);
-        }, 450);
+          T.busy = false; T.phase = "crossOnes";
+          if (T.guidance === "guide") bubble("bubble", `Now we have ${T.tO + 10} ones! Tap ${T.onesToCross} of them to cross out.`);
+          else if (T.guidance === "coach") bubble("bubble", `Great thinking! Now take away the ones.`);
+          updateGlow();
+        }, 500);
       }
-    }, 90);
-  } else if (State.phase === "crossTens") {
-    crossTen(node);
-  }
+    }, 110);
+  }, 600);
 }
 
-function crossTen(node) {
-  if (State.busy) return;
+function floatPlus(node) {
+  const r = node.getBoundingClientRect();
+  const f = el("span", "float-plus"); f.textContent = "+10";
+  f.style.left = r.left + "px"; f.style.top = r.top + "px";
+  document.body.appendChild(f);
+  requestAnimationFrame(() => { f.style.transform = "translateY(-40px)"; f.style.opacity = "0"; });
+  setTimeout(() => f.remove(), 1100);
+}
+
+function doCrossOne(node) {
   if (node.classList.contains("crossed")) return;
-  if (State.tensCrossed >= State.tensToCross) return;
-  node.classList.add("crossed");
-  node.classList.remove("tappable");
-  State.tensCrossed++;
-  Sound.cross();
-  const left = State.tensToCross - State.tensCrossed;
-  if (left > 0) {
-    bubble(`${left} more ${one(left, "ten", "tens")} to cross out.`);
-  } else {
-    finishTens();
-  }
+  if (T.onesCrossed >= T.onesToCross) return;
+  node.classList.add("crossed"); node.classList.remove("tappable", "live");
+  T.onesCrossed++; Sound.cross();
+  const left = T.onesToCross - T.onesCrossed;
+  if (left > 0) { if (T.guidance === "guide") bubble("bubble", `${left} more ${plural(left, "one", "ones")} to cross out.`); }
+  else finishOnesPhase();
 }
 
-function onOneClick(node) {
-  if (State.busy) return;
-  if (State.phase !== "crossOnes") return;
-  if (node.classList.contains("crossed")) return;
-  if (State.onesCrossed >= State.onesToCross) return;
-  node.classList.add("crossed");
-  node.classList.remove("tappable");
-  State.onesCrossed++;
-  Sound.cross();
-  const left = State.onesToCross - State.onesCrossed;
-  if (left > 0) {
-    bubble(`${left} more ${one(left, "one", "ones")} to cross out.`);
-  } else {
-    finishOnes();
-  }
-}
-
-function finishOnes() {
-  State.busy = true;
-  markOnesTappable(false);
-  const remaining = (State.exchanged ? State.tO + 10 : State.tO) - State.onesToCross;
-  const ao = $("ans-ones");
-  ao.textContent = remaining; ao.classList.add("ans-pop");
-  setText("cf-ro", remaining);
+function finishOnesPhase() {
+  T.busy = true;
+  document.querySelectorAll("#ones-col .one").forEach(o => o.classList.remove("tappable"));
+  const remaining = (T.exchanged ? T.tO + 10 : T.tO) - T.onesToCross;
+  const ao = $("ans-ones"); ao.textContent = remaining; ao.classList.add("ans-pop");
   Sound.step();
-  bubble(`Brilliant! ${remaining} ${one(remaining, "one", "ones")} left. Now let's do the Tens.`);
+  if (T.guidance === "guide") bubble("bubble", `${remaining} ${plural(remaining, "one", "ones")} left. Watch it jump into the Number way!`);
+  setTimeout(() => flyDigit(ao, $("cf-ro"), remaining), 350);
   setTimeout(() => {
     ao.classList.remove("ans-pop");
-    State.busy = false;
-    State.phase = "crossTens";
-    bubble(`Tap ${State.tensToCross} ${one(State.tensToCross, "ten", "tens")} to cross out.`);
-    markTensTappable(true, true);
-  }, 1100);
+    T.busy = false; T.phase = "crossTens";
+    if (T.guidance === "guide") bubble("bubble", `Now tap ${T.tensToCross} ${plural(T.tensToCross, "ten", "tens")} to cross out.`);
+    else if (T.guidance === "coach") bubble("bubble", `Now take away the tens.`);
+    updateGlow();
+  }, 1300);
 }
 
-function finishTens() {
-  State.busy = true;
-  markTensTappable(false);
-  const remaining = (State.exchanged ? State.tT - 1 : State.tT) - State.tensToCross;
-  const at = $("ans-tens");
-  at.textContent = remaining; at.classList.add("ans-pop");
-  setText("cf-rt", remaining);
+function doCrossTen(node) {
+  if (node.classList.contains("crossed")) return;
+  if (T.tensCrossed >= T.tensToCross) return;
+  node.classList.add("crossed"); node.classList.remove("tappable", "live");
+  T.tensCrossed++; Sound.cross();
+  const left = T.tensToCross - T.tensCrossed;
+  if (left > 0) { if (T.guidance === "guide") bubble("bubble", `${left} more ${plural(left, "ten", "tens")} to cross out.`); }
+  else finishTensPhase();
+}
+
+function finishTensPhase() {
+  T.busy = true;
+  document.querySelectorAll("#tens-col .ten").forEach(t => t.classList.remove("tappable"));
+  const remaining = (T.exchanged ? T.tT - 1 : T.tT) - T.tensToCross;
+  const at = $("ans-tens"); at.textContent = remaining; at.classList.add("ans-pop");
   Sound.step();
-  State.phase = "answer";
-  setTimeout(revealAnswer, 900);
+  setTimeout(() => flyDigit(at, $("cf-rt"), remaining), 350);
+  setTimeout(() => { at.classList.remove("ans-pop"); T.phase = "answer"; completeRound(); }, 1200);
 }
 
-function revealAnswer() {
-  const answer = State.top - State.bottom;
-  const ans = $("big-ans");
-  ans.textContent = answer;
-  ans.className = "solved";
-  $("big-top").parentElement.classList.add("solved-banner");
-  bubble(`You did it! ${State.top} − ${State.bottom} = ${answer}! 🦄🌈`, true);
-  Sound.win();
-  celebrate();
-  awardStar();
+function flyDigit(srcEl, dstEl, value) {
+  const s = srcEl.getBoundingClientRect(), d = dstEl.getBoundingClientRect();
+  if (!s.width && !d.width) { dstEl.textContent = value; return; }
+  const ghost = el("span", "fly-digit"); ghost.textContent = value;
+  ghost.style.left = s.left + "px"; ghost.style.top = s.top + "px";
+  document.body.appendChild(ghost);
+  requestAnimationFrame(() => {
+    ghost.style.transform = `translate(${(d.left - s.left)}px, ${(d.top - s.top)}px) scale(1.05)`;
+    ghost.style.opacity = "0.25";
+  });
+  setTimeout(() => { ghost.remove(); dstEl.textContent = value; dstEl.classList.add("cf-pop"); setTimeout(() => dstEl.classList.remove("cf-pop"), 500); }, 760);
+}
+
+function completeRound() {
+  const answer = T.top - T.bottom;
+  const ans = $("big-ans"); ans.textContent = answer; ans.className = "solved";
+  document.querySelector(".problem-banner").classList.add("solved-banner");
+  T.sessionStars++;
+  Store.addStars(1);
+  $("star-count").textContent = T.sessionStars;
+  $("progress-fill").style.width = Math.round(((T.round + 1) / ROUNDS) * 100) + "%";
+
+  // badges
+  if (Store.data.totalStars >= 1) earnBadge("first-star");
+  if (Store.data.totalStars >= 15) earnBadge("collector");
+  if (!T.hadMistake && T.hearts === 3) { T.perfects++; earnBadge("flawless"); }
+  if (T.guidance === "solo" && !T.hadMistake && !T.usedHint) earnBadge("soloist");
+
+  const extra = (!T.hadMistake && T.hearts === 3) ? " Perfect — all hearts! 💯" : "";
+  bubble("bubble", `You did it! ${T.top} − ${T.bottom} = ${answer}!${extra} 🦄🌈`, "cheer");
+  Sound.win(); celebrate(40);
+
   $("hint-btn").classList.add("hidden");
-  $("next-btn").classList.remove("hidden");
-  $("next-btn").textContent = State.round + 1 >= TOTAL_ROUNDS ? "Finish 🎉" : "Next ➜";
+  const nb = $("next-btn");
+  nb.classList.remove("hidden");
+  nb.textContent = (T.round + 1 >= ROUNDS) ? "See my award 🏆" : "Next ➜";
 }
 
-/* ---------- Tappable toggles ---------- */
-function markOnesTappable(on) {
-  document.querySelectorAll("#ones-col .one").forEach(o => {
-    if (on && !o.classList.contains("crossed")) o.classList.add("tappable");
-    else o.classList.remove("tappable");
-  });
-}
-function markTensTappable(on, skipExchanged) {
-  document.querySelectorAll("#tens-col .ten").forEach(t => {
-    const blocked = t.classList.contains("crossed");
-    if (on && !blocked) t.classList.add("tappable");
-    else t.classList.remove("tappable");
-  });
+function failRound() {
+  T.busy = false; T.phase = "answer";
+  const answer = T.top - T.bottom;
+  const aTens = Math.floor(answer / 10), aOnes = answer % 10;
+  $("ans-tens").textContent = aTens; $("ans-ones").textContent = aOnes;
+  setText("cf-rt", aTens === 0 ? "0" : aTens); setText("cf-ro", aOnes);
+  const ans = $("big-ans"); ans.textContent = answer; ans.className = "solved";
+  bubble("bubble", `${T.top} − ${T.bottom} = ${answer}. You'll get the next one! 💪`);
+  document.querySelectorAll("#tens-col .ten, #ones-col .one").forEach(n => n.classList.remove("tappable", "live"));
+  $("hint-btn").classList.add("hidden");
+  const nb = $("next-btn");
+  nb.classList.remove("hidden");
+  nb.textContent = (T.round + 1 >= ROUNDS) ? "See my award 🏆" : "Next ➜";
 }
 
-/* ---------- Hint (auto-do current step) ---------- */
-function hint() {
+function tutorNext() {
   Sound.resume();
-  if (State.busy) return;
-  if (State.phase === "exchange") {
-    const ten = document.querySelector("#tens-col .ten:not(.crossed)");
-    if (ten) ten.click();
-  } else if (State.phase === "crossOnes") {
-    const o = document.querySelector("#ones-col .one:not(.crossed)");
-    if (o) o.click();
-  } else if (State.phase === "crossTens") {
-    const t = document.querySelector("#tens-col .ten.tappable:not(.crossed)");
-    if (t) t.click();
+  T.round++;
+  if (T.round >= ROUNDS) { finishTutorSession(); return; }
+  startTutorRound();
+}
+
+function finishTutorSession() {
+  Store.data.sessions++; Store.save();
+  earnBadge("graduate");
+  showAward({
+    game: "tutor",
+    headline: T.perfects >= ROUNDS ? "A perfect round — wow!" : "Subtraction superstar!",
+    stats: [
+      { b: T.sessionStars + "/" + ROUNDS, s: "solved" },
+      { b: T.perfects, s: "perfect" },
+      { b: Store.data.totalStars, s: "total ⭐" }
+    ]
+  });
+}
+
+function tutorHint() {
+  Sound.resume();
+  if (T.busy) return;
+  T.usedHint = true;
+  if (T.phase === "exchange") { const t = document.querySelector("#tens-col .ten:not(.crossed)"); if (t) t.click(); }
+  else if (T.phase === "crossOnes") { const o = document.querySelector("#ones-col .one:not(.crossed)"); if (o) o.click(); }
+  else if (T.phase === "crossTens") { const t = document.querySelector("#tens-col .ten:not(.crossed)"); if (t) t.click(); }
+}
+
+/* ===================================================================
+   STAR QUIZ
+   =================================================================== */
+const Q = { i: 0, total: 8, score: 0, hearts: 3, answer: 0, busy: false };
+
+function startQuiz() {
+  Sound.resume();
+  App.lastGame = "quiz";
+  sessionNewBadges = [];
+  Q.i = 0; Q.score = 0; Q.hearts = 3; Q.busy = false;
+  show("screen-quiz");
+  renderHearts("quiz-hearts", Q.hearts);
+  $("quiz-buddy").textContent = pick(BUDDIES).e;
+  buildQuizDots();
+  bubble("quiz-bubble", "Tap the right answer as fast as you can! ⚡");
+  nextQuestion();
+}
+
+function buildQuizDots() {
+  const box = $("quiz-progress"); box.innerHTML = "";
+  for (let i = 0; i < Q.total; i++) box.appendChild(el("span", "qdot"));
+}
+function markDot(i, cls) { const d = $("quiz-progress").children[i]; if (d) { d.classList.remove("current"); d.classList.add(cls); } }
+function setCurrentDot(i) { const d = $("quiz-progress").children[i]; if (d) d.classList.add("current"); }
+
+function nextQuestion() {
+  if (Q.i >= Q.total || Q.hearts <= 0) { finishQuiz(); return; }
+  Q.busy = false;
+  setCurrentDot(Q.i);
+  const p = makeProblem(Math.random() < 0.5);
+  Q.answer = p.top - p.bottom;
+  $("quiz-top").textContent = p.top;
+  $("quiz-bot").textContent = p.bottom;
+  const choices = quizChoices(Q.answer);
+  const box = $("quiz-choices"); box.innerHTML = "";
+  choices.forEach(v => {
+    const b = el("button", "choice"); b.textContent = v;
+    b.addEventListener("click", () => onChoice(v, b));
+    box.appendChild(b);
+  });
+}
+
+function quizChoices(answer) {
+  const set = new Set([answer]);
+  const cands = shuffle([answer + 1, answer - 1, answer + 10, answer - 10, answer + 2, answer - 2, answer + 9, answer - 9]);
+  for (const c of cands) { if (set.size >= 4) break; if (c >= 0 && c <= 99 && !set.has(c)) set.add(c); }
+  const arr = [...set];
+  while (arr.length < 4) { const r = rnd(0, 99); if (!arr.includes(r)) arr.push(r); }
+  return shuffle(arr);
+}
+
+function onChoice(val, btn) {
+  if (Q.busy) return;
+  Q.busy = true;
+  const buttons = [...$("quiz-choices").children];
+  if (val === Q.answer) {
+    btn.classList.add("right");
+    Q.score++; Store.addStars(1);
+    if (Store.data.totalStars >= 1) earnBadge("first-star");
+    if (Store.data.totalStars >= 15) earnBadge("collector");
+    Sound.step();
+    markDot(Q.i, "done");
+    bubble("quiz-bubble", pick(["Yes! 🌟", "Brilliant! ✨", "Correct! 🎉", "Super! 💜"]));
+    celebrate(12);
+  } else {
+    btn.classList.add("wrong");
+    buttons.forEach(b => { if (Number(b.textContent) === Q.answer) b.classList.add("right"); else b.classList.add("dim"); });
+    Q.hearts--; Sound.oops();
+    const box = $("quiz-hearts"); const live = box.querySelectorAll(".heart:not(.lost)");
+    const last = live[live.length - 1]; if (last) last.classList.add("lost");
+    markDot(Q.i, "miss");
+    bubble("quiz-bubble", `It was ${Q.answer}. Keep going! 💪`, "oops");
   }
+  Q.i++;
+  setTimeout(nextQuestion, 1100);
 }
 
-/* ---------- Bubble + speech ---------- */
-let bubbleTimer = null;
-function bubble(text, cheer = false) {
-  const b = $("bubble");
-  b.textContent = text;
-  b.classList.toggle("cheer", cheer);
-  clearTimeout(bubbleTimer);
-  Speech.say(text);
+function finishQuiz() {
+  Store.data.quizPlays++;
+  if (Q.score > Store.data.quizBest) Store.data.quizBest = Q.score;
+  Store.save();
+  if (Q.score >= 6) earnBadge("quickthinker");
+  showAward({
+    game: "quiz",
+    headline: Q.score >= 6 ? "Lightning fast! ⚡" : (Q.score >= 3 ? "Nice work!" : "Good try — practice makes perfect!"),
+    stats: [
+      { b: Q.score + "/" + Q.total, s: "correct" },
+      { b: Store.data.quizBest, s: "your best" },
+      { b: Store.data.totalStars, s: "total ⭐" }
+    ]
+  });
 }
 
-/* ---------- Stars / progress ---------- */
-function awardStar() {
-  State.stars++;
-  $("star-count").textContent = State.stars;
-  const pct = Math.min(100, Math.round(((State.round + 1) / TOTAL_ROUNDS) * 100));
-  $("progress-fill").style.width = pct + "%";
+/* ===================================================================
+   AWARD / CERTIFICATE
+   =================================================================== */
+function showAward(info) {
+  $("cert-emoji").textContent = info.game === "quiz" ? "⚡" : "🏆";
+  $("cert-headline").textContent = info.headline;
+  const stats = $("cert-stats"); stats.innerHTML = "";
+  info.stats.forEach(st => {
+    const c = el("div", "cert-stat");
+    const b = el("b"); b.textContent = st.b;
+    const s = el("span"); s.textContent = st.s;
+    c.appendChild(b); c.appendChild(s); stats.appendChild(c);
+  });
+  const badges = $("cert-badges"); badges.innerHTML = "";
+  sessionNewBadges.forEach((bd, i) => {
+    const wrap = el("div", "cert-badge"); wrap.style.animationDelay = (0.15 * i) + "s";
+    wrap.textContent = bd.e;
+    const nm = el("span", "cb-name"); nm.textContent = "New: " + bd.n;
+    wrap.appendChild(nm); badges.appendChild(wrap);
+  });
+  $("cert-date").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  show("screen-award");
+  Sound.fanfare(); celebrate(80);
+  Speech.say("Congratulations Natasha! " + info.headline);
 }
 
-/* ---------- Confetti ---------- */
-function celebrate() {
+/* ===================================================================
+   CONFETTI + FLOATIES + STARS
+   =================================================================== */
+function celebrate(count) {
   const layer = $("confetti");
   const colors = ["#ff7eb9", "#9b6dff", "#7ef0d3", "#ffe66d", "#ff4d6d", "#6a3fd6"];
-  const emojis = ["🦄", "🌈", "⭐", "✨", "💖"];
-  for (let i = 0; i < 60; i++) {
+  const emojis = ["🦄", "🌈", "⭐", "✨", "💖", "🎈", "🐉", "🦋"];
+  for (let i = 0; i < count; i++) {
     const s = el("span");
-    const useEmoji = Math.random() < 0.25;
-    if (useEmoji) {
-      s.textContent = emojis[Math.floor(Math.random() * emojis.length)];
-      s.style.fontSize = (16 + Math.random() * 16) + "px";
+    if (Math.random() < 0.3) {
+      s.textContent = pick(emojis);
+      s.style.fontSize = (16 + Math.random() * 18) + "px";
       s.style.background = "transparent";
     } else {
-      s.style.background = colors[Math.floor(Math.random() * colors.length)];
+      s.style.background = pick(colors);
     }
     s.style.left = Math.random() * 100 + "vw";
     s.style.animationDuration = (1.8 + Math.random() * 1.8) + "s";
     s.style.animationDelay = (Math.random() * 0.5) + "s";
     layer.appendChild(s);
-    setTimeout(() => s.remove(), 4000);
+    setTimeout(() => s.remove(), 4200);
   }
-}
-
-/* ---------- Finish screen ---------- */
-function finishGame() {
-  const game = $("screen-game");
-  bubble(`Wow Natasha! You earned ${State.stars} stars! You're a true Subtraction Unicorn! 🦄⭐`, true);
-  celebrate();
-  Sound.win();
-  // build a quick replay prompt in the banner area
-  $("next-btn").textContent = "Play again 🦄";
-}
-
-/* ---------- Navigation ---------- */
-function nextRound() {
-  Sound.resume();
-  State.round++;
-  $("big-top").parentElement.classList.remove("solved-banner");
-  if (State.round >= TOTAL_ROUNDS) {
-    // celebrate the whole set, then restart fresh
-    finishGame();
-    State.round = 0;
-    State.stars = 0;
-    $("star-count").textContent = "0";
-    $("progress-fill").style.width = "0%";
-    setTimeout(startRound, 2600);
-    return;
-  }
-  startRound();
-}
-
-function goHome() {
-  window.speechSynthesis && window.speechSynthesis.cancel();
-  $("screen-game").classList.add("hidden");
-  $("screen-start").classList.remove("hidden");
-}
-
-function startGame(mode) {
-  Sound.resume();
-  State.mode = mode;
-  State.round = 0;
-  State.stars = 0;
-  $("star-count").textContent = "0";
-  $("progress-fill").style.width = "0%";
-  $("screen-start").classList.add("hidden");
-  $("screen-game").classList.remove("hidden");
-  startRound();
-}
-
-/* ---------- Wire up ---------- */
-function init() {
-  Speech.init();
-  document.querySelector(".unicorn-big").innerHTML = UNICORN_SVG;
-  document.querySelector(".unicorn-small").innerHTML = UNICORN_SVG;
-
-  $("stars").appendChild(buildStars());
-
-  document.querySelectorAll(".lvl-btn").forEach(btn => {
-    btn.addEventListener("click", () => startGame(btn.dataset.mode));
-  });
-
-  $("speak-toggle").addEventListener("change", (e) => {
-    Speech.on = e.target.checked;
-    syncSpeakBtn();
-  });
-  $("speak-btn").addEventListener("click", () => {
-    Speech.on = !Speech.on;
-    $("speak-toggle").checked = Speech.on;
-    syncSpeakBtn();
-    if (!Speech.on) window.speechSynthesis && window.speechSynthesis.cancel();
-  });
-
-  $("hint-btn").addEventListener("click", hint);
-  $("next-btn").addEventListener("click", nextRound);
-  $("home-btn").addEventListener("click", goHome);
-}
-
-function syncSpeakBtn() {
-  $("speak-btn").classList.toggle("muted", !Speech.on);
-  $("speak-btn").textContent = Speech.on ? "🔊" : "🔇";
 }
 
 function buildStars() {
   const frag = document.createDocumentFragment();
   const glyphs = ["⭐", "✨", "🌟", "💫"];
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < 24; i++) {
     const s = el("span", "star");
-    s.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+    s.textContent = pick(glyphs);
     s.style.left = Math.random() * 100 + "%";
     s.style.top = Math.random() * 100 + "%";
     s.style.animationDelay = (Math.random() * 3) + "s";
@@ -537,6 +699,93 @@ function buildStars() {
     frag.appendChild(s);
   }
   return frag;
+}
+
+function buildFloaties() {
+  const box = $("floaties");
+  const cast = shuffle(BUDDIES.slice()).slice(0, 5);
+  cast.forEach((c, i) => {
+    const f = el("span", "floatie");
+    f.textContent = c.e;
+    f.style.left = (8 + i * 19 + Math.random() * 6) + "%";
+    f.style.top = (10 + Math.random() * 70) + "%";
+    f.style.animationDuration = (7 + Math.random() * 6) + "s";
+    f.style.animationDelay = (Math.random() * 4) + "s";
+    box.appendChild(f);
+  });
+}
+
+/* ===================================================================
+   HOME + BADGES MODAL
+   =================================================================== */
+function renderHome() {
+  $("home-stars").textContent = Store.data.totalStars;
+  $("home-badges-count").textContent = Store.badgeCount();
+}
+
+function openBadges() {
+  const grid = $("badge-grid"); grid.innerHTML = "";
+  BADGES.forEach(bd => {
+    const earned = Store.hasBadge(bd.id);
+    const card = el("div", "badge" + (earned ? "" : " locked"));
+    const em = el("div", "b-emoji"); em.textContent = earned ? bd.e : "🔒";
+    const nm = el("div", "b-name"); nm.textContent = bd.n;
+    const ds = el("div", "b-desc"); ds.textContent = bd.d;
+    card.appendChild(em); card.appendChild(nm); card.appendChild(ds);
+    grid.appendChild(card);
+  });
+  $("badge-modal").classList.remove("hidden");
+}
+function closeBadges() { $("badge-modal").classList.add("hidden"); }
+
+function goHome() {
+  Speech.cancel();
+  renderHome();
+  show("screen-home");
+}
+
+/* ===================================================================
+   INIT
+   =================================================================== */
+function syncSpeakBtns() {
+  ["speak-btn", "quiz-speak-btn"].forEach(id => {
+    const b = $(id); if (!b) return;
+    b.classList.toggle("muted", !Speech.on);
+    b.textContent = Speech.on ? "🔊" : "🔇";
+  });
+  $("speak-toggle").checked = Speech.on;
+}
+function toggleSpeak() {
+  Speech.on = !Speech.on;
+  if (!Speech.on) Speech.cancel();
+  syncSpeakBtns();
+}
+
+function init() {
+  Store.load();
+  Speech.init();
+  document.querySelector(".unicorn-big").innerHTML = UNICORN_SVG;
+  $("stars").appendChild(buildStars());
+  buildFloaties();
+  renderHome();
+
+  $("play-tutor").addEventListener("click", startTutor);
+  $("play-quiz").addEventListener("click", startQuiz);
+  $("badges-btn").addEventListener("click", openBadges);
+  $("badge-close").addEventListener("click", closeBadges);
+  $("badge-modal").addEventListener("click", (e) => { if (e.target === $("badge-modal")) closeBadges(); });
+
+  $("speak-toggle").addEventListener("change", (e) => { Speech.on = e.target.checked; if (!Speech.on) Speech.cancel(); syncSpeakBtns(); });
+  $("speak-btn").addEventListener("click", toggleSpeak);
+  $("quiz-speak-btn").addEventListener("click", toggleSpeak);
+
+  $("hint-btn").addEventListener("click", tutorHint);
+  $("next-btn").addEventListener("click", tutorNext);
+  $("home-btn").addEventListener("click", goHome);
+  $("quiz-home-btn").addEventListener("click", goHome);
+
+  $("award-home").addEventListener("click", goHome);
+  $("award-again").addEventListener("click", () => { if (App.lastGame === "quiz") startQuiz(); else startTutor(); });
 }
 
 document.addEventListener("DOMContentLoaded", init);
