@@ -146,8 +146,7 @@ body {
 .ps-btn { cursor: pointer; font-family: inherit; transition: transform 0.12s ease; }
 .ps-btn:hover { transform: translateY(-2px) scale(1.04); }
 
-.game-grid { display: grid; gap: 16px; grid-template-columns: 1fr; margin: 6px 0 18px; }
-@media (min-width: 520px) { .game-grid { grid-template-columns: 1fr 1fr; } }
+.game-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 6px 0 18px; }
 
 .game-card {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -161,6 +160,7 @@ body {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .game-card:nth-child(2) { background: linear-gradient(160deg, #fff, #d9f6ee); }
+.game-card:nth-child(3) { background: linear-gradient(160deg, #fff, #e3e0ff); }
 .game-card:hover { transform: translateY(-5px) scale(1.03); box-shadow: 0 16px 30px rgba(155, 109, 255, 0.32); }
 .game-card:active { transform: translateY(0) scale(0.99); }
 .gc-emoji { font-size: 42px; }
@@ -435,6 +435,56 @@ body {
 .choice.right { background: linear-gradient(160deg, #d8ffe9, var(--mint)); color: var(--ok); animation: pop 0.4s ease; }
 .choice.wrong { background: linear-gradient(160deg, #ffd9e1, #ff9bb0); color: #fff; animation: wrongShake 0.4s ease; }
 .choice.dim { opacity: 0.45; }
+
+/* ---------- Days of the week wheel ---------- */
+.wk-banner { font-size: clamp(20px, 5.5vw, 34px); }
+.wk-op { color: var(--pink); font-size: 0.62em; margin: 0 6px; }
+
+.week-wheel {
+  position: relative;
+  width: min(84vw, 350px);
+  height: min(84vw, 350px);
+  margin: 2px auto;
+}
+.wheel-center {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 34%; height: 34%; border-radius: 50%;
+  background: var(--card); border: 3px solid #fff;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font-weight: bold; color: var(--purple-deep); font-size: 15px;
+  box-shadow: var(--shadow); padding: 6px;
+}
+.day-node {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 64px; height: 64px; border-radius: 16px; border: 3px solid #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  box-shadow: 0 6px 14px rgba(106, 63, 214, 0.2); cursor: default;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  font-weight: bold; color: var(--ink);
+}
+.day-node .dn-emoji { font-size: 20px; line-height: 1.1; }
+.day-node .dn-name { font-size: 13px; }
+.day-node.live { cursor: pointer; }
+.day-node.live:hover { transform: translate(-50%, -50%) scale(1.09); box-shadow: 0 10px 18px rgba(106, 63, 214, 0.32); }
+.day-node.today { box-shadow: 0 0 0 3px var(--purple), 0 6px 14px rgba(106, 63, 214, 0.2); }
+.day-node.next::after {
+  content: ""; position: absolute; inset: -6px; border-radius: 20px;
+  border: 3px dashed var(--yellow); animation: hintglow 1.1s ease-in-out infinite;
+}
+.day-node.landed { background: linear-gradient(160deg, #d8ffe9, var(--mint)) !important; color: var(--ok); animation: pop 0.4s ease; }
+.day-node.wrong { animation: wrongShake 0.4s ease; }
+.week-token {
+  position: absolute; transform: translate(-50%, -118%);
+  font-size: 34px; pointer-events: none; z-index: 3;
+  filter: drop-shadow(0 4px 5px rgba(106, 63, 214, 0.3));
+  transition: left 0.45s cubic-bezier(0.5, -0.2, 0.3, 1.3), top 0.45s cubic-bezier(0.5, -0.2, 0.3, 1.3);
+}
+@media (max-width: 400px) {
+  .day-node { width: 56px; height: 56px; border-radius: 14px; }
+  .day-node .dn-emoji { font-size: 18px; }
+  .day-node .dn-name { font-size: 12px; }
+  .week-token { font-size: 30px; }
+}
 
 /* ---------- Certificate / award ---------- */
 #screen-award { display: flex; flex-direction: column; gap: 16px; align-items: center; }

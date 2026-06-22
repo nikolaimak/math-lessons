@@ -45,6 +45,11 @@
           <span class="gc-name">Star Quiz</span>
           <span class="gc-desc">Quick-fire answers, beat your best!</span>
         </button>
+        <button class="game-card" id="play-weekday">
+          <span class="gc-emoji">📅</span>
+          <span class="gc-name">Days of the Week</span>
+          <span class="gc-desc">Hop through the week to find the day</span>
+        </button>
       </div>
 
       <label class="sound-toggle">
@@ -153,6 +158,40 @@
       </div>
 
       <div class="quiz-choices" id="quiz-choices"></div>
+    </section>
+
+    <!-- ============ DAYS OF THE WEEK ============ -->
+    <section id="screen-weekday" class="screen hidden">
+      <header class="game-top">
+        <button class="icon-btn" id="wk-home-btn" title="Back home">🏠</button>
+        <div class="hearts" id="wk-hearts" title="Lives"></div>
+        <div class="progress-wrap" title="Stars collected">
+          <div class="progress-bar"><div class="progress-fill" id="wk-progress-fill"></div></div>
+          <div class="star-count">⭐ <span id="wk-star-count">0</span></div>
+        </div>
+        <button class="icon-btn" id="wk-speak-btn" title="Read aloud on/off">🔊</button>
+      </header>
+
+      <div class="problem-banner wk-banner">
+        <span id="wk-today">Sunday</span>
+        <span class="wk-op" id="wk-op">+ 3 days</span>
+        <span class="eq">=</span>
+        <span id="wk-ans" class="qmark">?</span>
+      </div>
+
+      <div class="helper">
+        <div class="buddy" id="wk-buddy" aria-hidden="true">🦄</div>
+        <div class="bubble" id="wk-bubble">Let's hop through the week! ✨</div>
+      </div>
+
+      <div class="week-wheel" id="week-wheel" aria-label="Days of the week">
+        <div class="wheel-center" id="wk-center">Hop!</div>
+      </div>
+
+      <div class="controls">
+        <button class="big-btn ghost" id="wk-hint-btn">💡 Show me</button>
+        <button class="big-btn primary hidden" id="wk-next-btn">Next ➜</button>
+      </div>
     </section>
 
     <!-- ============ AWARD / CERTIFICATE ============ -->

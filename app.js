@@ -62,7 +62,9 @@ const BADGES = [
   { id: "collector", e: "🌟", n: "Star Collector", d: "Collect 15 stars in total" },
   { id: "graduate", e: "🎓", n: "Graduate", d: "Finish a Tens & Ones session" },
   { id: "quickthinker", e: "⚡", n: "Quick Thinker", d: "Score 6+ in Star Quiz" },
-  { id: "soloist", e: "🦸", n: "On My Own", d: "Solve a round with no hints showing" }
+  { id: "soloist", e: "🦸", n: "On My Own", d: "Solve a round with no hints showing" },
+  { id: "daytripper", e: "📅", n: "Day Tripper", d: "Finish a Days of the Week game" },
+  { id: "timetraveller", e: "⏳", n: "Time Traveller", d: "Solve a 'days ago' question" }
 ];
 
 /* ---------- On-device storage ---------- */
@@ -164,7 +166,7 @@ function makeProblem(wantExchange) {
    =================================================================== */
 const App = { lastGame: "tutor" };
 function show(id) {
-  ["screen-home", "screen-game", "screen-quiz", "screen-award"].forEach(s => $(s).classList.add("hidden"));
+  ["screen-home", "screen-game", "screen-quiz", "screen-weekday", "screen-award"].forEach(s => $(s).classList.add("hidden"));
   $(id).classList.remove("hidden");
   window.scrollTo(0, 0);
 }
@@ -191,11 +193,14 @@ const T = {
   hadMistake: false, usedHint: false, buddy: BUDDIES[0]
 };
 
-function guidanceFor(i) {
-  const score = i + T.bias;
+function guidanceLevel(i, bias) {
+  const score = i + bias;
   if (score < 2) return "guide";
   if (score < 4) return "coach";
   return "solo";
+}
+function biasFromSessions() {
+  return Store.data.sessions >= 5 ? 2 : (Store.data.sessions >= 2 ? 1 : 0);
 }
 
 function startTutor() {
@@ -203,7 +208,7 @@ function startTutor() {
   App.lastGame = "tutor";
   sessionNewBadges = [];
   T.round = 0; T.sessionStars = 0; T.perfects = 0;
-  T.bias = Store.data.sessions >= 5 ? 2 : (Store.data.sessions >= 2 ? 1 : 0);
+  T.bias = biasFromSessions();
   $("star-count").textContent = "0";
   $("progress-fill").style.width = "0%";
   show("screen-game");
@@ -218,7 +223,7 @@ function startTutorRound() {
     needExchange: p.needExchange, exchanged: false,
     onesToCross: p.bO, tensToCross: p.bT, onesCrossed: 0, tensCrossed: 0,
     phase: "build", busy: false, hearts: 3, hadMistake: false, usedHint: false,
-    guidance: guidanceFor(T.round), buddy: pick(BUDDIES)
+    guidance: guidanceLevel(T.round, T.bias), buddy: pick(BUDDIES)
   });
 
   $("buddy").textContent = T.buddy.e;
@@ -637,10 +642,255 @@ function finishQuiz() {
 }
 
 /* ===================================================================
+   DAYS OF THE WEEK — hop around the wheel
+   =================================================================== */
+const WROUNDS = 5;
+const DAYS = [
+  { short: "Mon", long: "Monday", e: "🌙", c: "#d7c6ff" },
+  { short: "Tue", long: "Tuesday", e: "🌷", c: "#ffc6e0" },
+  { short: "Wed", long: "Wednesday", e: "🐬", c: "#a9e8ff" },
+  { short: "Thu", long: "Thursday", e: "🌟", c: "#ffe39a" },
+  { short: "Fri", long: "Friday", e: "🐝", c: "#ffd0a6" },
+  { short: "Sat", long: "Saturday", e: "🎈", c: "#bdf0cd" },
+  { short: "Sun", long: "Sunday", e: "☀️", c: "#ffd1d1" }
+];
+const W = {
+  round: 0, bias: 0, sessionStars: 0, perfects: 0,
+  today: 0, delta: 1, dir: 1, answer: 0, current: 0, hopsDone: 0,
+  phase: "hop", busy: false, hearts: 3, guidance: "guide",
+  hadMistake: false, usedHint: false, buddy: BUDDIES[0], token: null
+};
+
+function wheelPos(i) {
+  const ang = (-90 + i * (360 / 7)) * Math.PI / 180;
+  const r = 38;
+  return { left: 50 + r * Math.cos(ang), top: 50 + r * Math.sin(ang) };
+}
+function nodeAt(i) { return $("week-wheel").querySelector('.day-node[data-idx="' + i + '"]'); }
+function expectedNext() { return ((W.current + W.dir) % 7 + 7) % 7; }
+function weekdayOp() { return (W.dir === 1 ? "+ " : "− ") + W.delta + " " + plural(W.delta, "day", "days"); }
+
+function weekdayParams(round) {
+  if (round === 0) return { delta: 1, dir: 1 };
+  if (round === 1) return { delta: 1, dir: -1 };
+  if (round === 2) return { delta: rnd(2, 3), dir: 1 };
+  if (round === 3) return { delta: rnd(2, 3), dir: -1 };
+  return { delta: rnd(1, 4), dir: Math.random() < 0.5 ? 1 : -1 };
+}
+
+function startWeekday() {
+  Sound.resume();
+  App.lastGame = "weekday";
+  sessionNewBadges = [];
+  W.round = 0; W.sessionStars = 0; W.perfects = 0; W.bias = biasFromSessions();
+  $("wk-star-count").textContent = "0";
+  $("wk-progress-fill").style.width = "0%";
+  show("screen-weekday");
+  startWeekdayRound();
+}
+
+function startWeekdayRound() {
+  const p = weekdayParams(W.round);
+  Object.assign(W, {
+    today: rnd(0, 6), delta: p.delta, dir: p.dir,
+    hopsDone: 0, phase: "hop", busy: false, hearts: 3,
+    hadMistake: false, usedHint: false,
+    guidance: guidanceLevel(W.round, W.bias), buddy: pick(BUDDIES)
+  });
+  W.current = W.today;
+  W.answer = ((W.today + W.dir * W.delta) % 7 + 7) % 7;
+
+  $("wk-buddy").textContent = W.buddy.e;
+  renderHearts("wk-hearts", W.hearts);
+  $("wk-today").textContent = DAYS[W.today].long;
+  $("wk-op").textContent = weekdayOp();
+  const ans = $("wk-ans"); ans.textContent = "?"; ans.className = "qmark";
+  $("wk-center").textContent = "Hop!";
+  $("wk-next-btn").classList.add("hidden");
+  $("wk-hint-btn").classList.remove("hidden");
+
+  renderWheel();
+  introWeekday();
+}
+
+function renderWheel() {
+  const wheel = $("week-wheel");
+  wheel.querySelectorAll(".day-node, .week-token").forEach(n => n.remove());
+  DAYS.forEach((d, i) => {
+    const node = el("div", "day-node");
+    const pos = wheelPos(i);
+    node.style.left = pos.left + "%"; node.style.top = pos.top + "%";
+    node.style.background = "linear-gradient(160deg,#fff," + d.c + ")";
+    node.dataset.idx = i;
+    const em = el("div", "dn-emoji"); em.textContent = d.e;
+    const nm = el("div", "dn-name"); nm.textContent = d.short;
+    node.appendChild(em); node.appendChild(nm);
+    node.addEventListener("click", () => onDayTap(i));
+    wheel.appendChild(node);
+  });
+  W.token = el("div", "week-token"); W.token.textContent = W.buddy.e;
+  wheel.appendChild(W.token);
+  placeToken(W.today, false);
+  nodeAt(W.today).classList.add("today");
+}
+
+function placeToken(i, animate) {
+  const pos = wheelPos(i);
+  if (!animate) W.token.style.transition = "none";
+  W.token.style.left = pos.left + "%";
+  W.token.style.top = pos.top + "%";
+  if (!animate) requestAnimationFrame(() => { W.token.style.transition = ""; });
+}
+
+function introWeekday() {
+  const todayName = DAYS[W.today].long;
+  const dirWord = W.dir === 1 ? "forward" : "back";
+  let full;
+  if (W.dir === 1 && W.delta === 1) full = `Today is ${todayName}. What day is tomorrow?`;
+  else if (W.dir === -1 && W.delta === 1) full = `Today is ${todayName}. What day was yesterday?`;
+  else if (W.dir === 1) full = `Today is ${todayName}. What day will it be in ${W.delta} days?`;
+  else full = `Today is ${todayName}. What day was it ${W.delta} days ago?`;
+
+  if (W.guidance === "guide") {
+    bubble("wk-bubble", `Hi, I'm ${W.buddy.n}! ${full} Let's hop ${dirWord} ${W.delta} ${plural(W.delta, "day", "days")} — tap each glowing day!`);
+  } else if (W.guidance === "coach") {
+    bubble("wk-bubble", `${full} Hop ${dirWord} ${W.delta} ${plural(W.delta, "day", "days")} — tap each day in turn.`);
+  } else {
+    bubble("wk-bubble", `${full} Hop to find out! 🌟`);
+  }
+  updateWheelGlow();
+}
+
+function updateWheelGlow() {
+  const nodes = $("week-wheel").querySelectorAll(".day-node");
+  nodes.forEach(n => { n.classList.remove("next"); n.classList.add("live"); });
+  if (W.guidance === "guide" && W.phase === "hop") nodeAt(expectedNext()).classList.add("next");
+}
+
+function onDayTap(i) {
+  if (W.busy || W.phase !== "hop") return;
+  if (i === W.current) return;
+  if (i === expectedNext()) hopForward(i);
+  else wrongDayTap(nodeAt(i));
+}
+
+function hopForward(i) {
+  W.busy = true;
+  W.current = i; W.hopsDone++;
+  placeToken(i, true);
+  Sound.step();
+  $("wk-center").textContent = W.hopsDone + " " + plural(W.hopsDone, "day", "days");
+  $("week-wheel").querySelectorAll(".day-node").forEach(n => n.classList.remove("next"));
+  setTimeout(() => {
+    if (W.hopsDone >= W.delta) { landWeekday(); }
+    else {
+      W.busy = false;
+      if (W.guidance === "guide") {
+        const left = W.delta - W.hopsDone;
+        bubble("wk-bubble", `${W.hopsDone} done! ${left} more ${plural(left, "hop", "hops")} to go.`);
+      }
+      updateWheelGlow();
+    }
+  }, 480);
+}
+
+function wrongDayTap(node) {
+  node.classList.add("wrong");
+  setTimeout(() => node.classList.remove("wrong"), 420);
+  const dirWord = W.dir === 1 ? "forward" : "back";
+  if (W.guidance === "guide") {
+    bubble("wk-bubble", `Not that one — hop just one day ${dirWord} at a time. ✨`);
+    return;
+  }
+  loseHeartW(dirWord);
+}
+
+function loseHeartW(dirWord) {
+  W.hearts--; W.hadMistake = true;
+  Sound.oops();
+  const box = $("wk-hearts");
+  const live = box.querySelectorAll(".heart:not(.lost)");
+  const last = live[live.length - 1];
+  if (last) { last.classList.add("ping"); setTimeout(() => { last.classList.add("lost"); last.classList.remove("ping"); }, 200); }
+  if (W.hearts <= 0) { bubble("wk-bubble", "Tricky one! Let me show you.", "oops"); setTimeout(() => failWeekdayRound(), 900); }
+  else { bubble("wk-bubble", `Oops! Hop one day ${dirWord} at a time. ${W.hearts} ${plural(W.hearts, "heart", "hearts")} left.`, "oops"); }
+}
+
+function landWeekday() {
+  W.phase = "done"; W.busy = false;
+  $("week-wheel").querySelectorAll(".day-node").forEach(n => n.classList.remove("live", "next"));
+  nodeAt(W.current).classList.add("landed");
+  completeWeekdayRound();
+}
+
+function completeWeekdayRound() {
+  const ansName = DAYS[W.answer].long;
+  const ans = $("wk-ans"); ans.textContent = ansName; ans.className = "solved";
+  W.sessionStars++; Store.addStars(1);
+  $("wk-star-count").textContent = W.sessionStars;
+  $("wk-progress-fill").style.width = Math.round(((W.round + 1) / WROUNDS) * 100) + "%";
+
+  if (Store.data.totalStars >= 1) earnBadge("first-star");
+  if (Store.data.totalStars >= 15) earnBadge("collector");
+  if (!W.hadMistake && W.hearts === 3) { W.perfects++; earnBadge("flawless"); }
+  if (W.dir === -1) earnBadge("timetraveller");
+  if (W.guidance === "solo" && !W.hadMistake && !W.usedHint) earnBadge("soloist");
+
+  bubble("wk-bubble", `You did it! It's ${ansName}! 📅🌈`, "cheer");
+  Sound.win(); celebrate(40);
+  $("wk-hint-btn").classList.add("hidden");
+  const nb = $("wk-next-btn");
+  nb.classList.remove("hidden");
+  nb.textContent = (W.round + 1 >= WROUNDS) ? "See my award 🏆" : "Next ➜";
+}
+
+function failWeekdayRound() {
+  W.phase = "done"; W.busy = false;
+  $("week-wheel").querySelectorAll(".day-node").forEach(n => n.classList.remove("live", "next"));
+  nodeAt(W.answer).classList.add("landed");
+  placeToken(W.answer, true);
+  const ansName = DAYS[W.answer].long;
+  const ans = $("wk-ans"); ans.textContent = ansName; ans.className = "solved";
+  bubble("wk-bubble", `It's ${ansName}. You'll get the next one! 💪`);
+  $("wk-hint-btn").classList.add("hidden");
+  const nb = $("wk-next-btn");
+  nb.classList.remove("hidden");
+  nb.textContent = (W.round + 1 >= WROUNDS) ? "See my award 🏆" : "Next ➜";
+}
+
+function weekdayNext() {
+  Sound.resume();
+  W.round++;
+  if (W.round >= WROUNDS) { finishWeekdaySession(); return; }
+  startWeekdayRound();
+}
+
+function finishWeekdaySession() {
+  Store.data.sessions++; Store.save();
+  earnBadge("daytripper");
+  showAward({
+    game: "weekday",
+    headline: W.perfects >= WROUNDS ? "Perfect week — amazing!" : "Weekday wizard! 📅",
+    stats: [
+      { b: W.sessionStars + "/" + WROUNDS, s: "solved" },
+      { b: W.perfects, s: "perfect" },
+      { b: Store.data.totalStars, s: "total ⭐" }
+    ]
+  });
+}
+
+function weekdayHint() {
+  Sound.resume();
+  if (W.busy || W.phase !== "hop") return;
+  W.usedHint = true;
+  hopForward(expectedNext());
+}
+
+/* ===================================================================
    AWARD / CERTIFICATE
    =================================================================== */
 function showAward(info) {
-  $("cert-emoji").textContent = info.game === "quiz" ? "⚡" : "🏆";
+  $("cert-emoji").textContent = info.game === "quiz" ? "⚡" : (info.game === "weekday" ? "📅" : "🏆");
   $("cert-headline").textContent = info.headline;
   const stats = $("cert-stats"); stats.innerHTML = "";
   info.stats.forEach(st => {
@@ -748,7 +998,7 @@ function goHome() {
    INIT
    =================================================================== */
 function syncSpeakBtns() {
-  ["speak-btn", "quiz-speak-btn"].forEach(id => {
+  ["speak-btn", "quiz-speak-btn", "wk-speak-btn"].forEach(id => {
     const b = $(id); if (!b) return;
     b.classList.toggle("muted", !Speech.on);
     b.textContent = Speech.on ? "🔊" : "🔇";
@@ -771,6 +1021,7 @@ function init() {
 
   $("play-tutor").addEventListener("click", startTutor);
   $("play-quiz").addEventListener("click", startQuiz);
+  $("play-weekday").addEventListener("click", startWeekday);
   $("badges-btn").addEventListener("click", openBadges);
   $("badge-close").addEventListener("click", closeBadges);
   $("badge-modal").addEventListener("click", (e) => { if (e.target === $("badge-modal")) closeBadges(); });
@@ -778,14 +1029,22 @@ function init() {
   $("speak-toggle").addEventListener("change", (e) => { Speech.on = e.target.checked; if (!Speech.on) Speech.cancel(); syncSpeakBtns(); });
   $("speak-btn").addEventListener("click", toggleSpeak);
   $("quiz-speak-btn").addEventListener("click", toggleSpeak);
+  $("wk-speak-btn").addEventListener("click", toggleSpeak);
 
   $("hint-btn").addEventListener("click", tutorHint);
   $("next-btn").addEventListener("click", tutorNext);
   $("home-btn").addEventListener("click", goHome);
   $("quiz-home-btn").addEventListener("click", goHome);
+  $("wk-hint-btn").addEventListener("click", weekdayHint);
+  $("wk-next-btn").addEventListener("click", weekdayNext);
+  $("wk-home-btn").addEventListener("click", goHome);
 
   $("award-home").addEventListener("click", goHome);
-  $("award-again").addEventListener("click", () => { if (App.lastGame === "quiz") startQuiz(); else startTutor(); });
+  $("award-again").addEventListener("click", () => {
+    if (App.lastGame === "quiz") startQuiz();
+    else if (App.lastGame === "weekday") startWeekday();
+    else startTutor();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", init);
