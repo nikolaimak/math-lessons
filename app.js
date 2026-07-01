@@ -1115,7 +1115,7 @@ function finishArraySession() {
    AWARD / CERTIFICATE
    =================================================================== */
 function showAward(info) {
-  $("cert-emoji").textContent = info.game === "quiz" ? "⚡" : (info.game === "weekday" ? "📅" : (info.game === "arrays" ? "🔢" : "🏆"));
+  $("cert-emoji").textContent = info.game === "quiz" ? "⚡" : (info.game === "weekday" ? "📅" : (info.game === "arrays" ? "🔲" : "🏆"));
   $("cert-headline").textContent = info.headline;
   const stats = $("cert-stats"); stats.innerHTML = "";
   info.stats.forEach(st => {
