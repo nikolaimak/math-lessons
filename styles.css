@@ -161,6 +161,7 @@ body {
 }
 .game-card:nth-child(2) { background: linear-gradient(160deg, #fff, #d9f6ee); }
 .game-card:nth-child(3) { background: linear-gradient(160deg, #fff, #e3e0ff); }
+.game-card:nth-child(4) { background: linear-gradient(160deg, #fff, #fff0d0); }
 .game-card:hover { transform: translateY(-5px) scale(1.03); box-shadow: 0 16px 30px rgba(155, 109, 255, 0.32); }
 .game-card:active { transform: translateY(0) scale(0.99); }
 .gc-emoji { font-size: 42px; }
@@ -563,6 +564,41 @@ body {
 @keyframes fall {
   to { transform: translateY(110vh) rotate(720deg); opacity: 0.9; }
 }
+
+/* ---------- Dot Arrays game ---------- */
+#screen-arrays { display: flex; flex-direction: column; gap: 12px; }
+
+.ar-equation {
+  display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+  font-size: clamp(22px, 6vw, 36px); font-weight: bold;
+  background: var(--card); border: 3px solid #fff; border-radius: 20px;
+  padding: 10px 16px; box-shadow: var(--shadow);
+}
+.ar-label { color: var(--ink); font-size: 0.75em; }
+.ar-given { color: var(--purple-deep); }
+.ar-blank {
+  color: var(--mint); min-width: 48px; text-align: center;
+  background: #fff; border: 3px dashed var(--mint); border-radius: 12px; padding: 2px 10px;
+}
+
+.ar-grid-wrap {
+  display: flex; justify-content: center; align-items: center;
+  background: var(--card); border: 3px solid #fff; border-radius: 20px;
+  padding: 16px 12px; box-shadow: var(--shadow);
+}
+.ar-dot-grid { display: grid; }
+.ar-dot {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #c4b4ff, var(--purple-deep));
+  box-shadow: 0 3px 7px rgba(106, 63, 214, 0.3);
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+.ar-dot.ar-hint-0 { background: radial-gradient(circle at 35% 30%, #ffb3d9, #ff7eb9); }
+.ar-dot.ar-hint-1 { background: radial-gradient(circle at 35% 30%, #c9b8ff, #9b6dff); }
+.ar-dot.ar-hint-2 { background: radial-gradient(circle at 35% 30%, #a8f5e3, #7ef0d3); }
+.ar-dot.ar-hint-3 { background: radial-gradient(circle at 35% 30%, #ffe98a, #ffc107); }
+.ar-dot.ar-hint-4 { background: radial-gradient(circle at 35% 30%, #a0d8ff, #3f9eeb); }
+.ar-dot.ar-correct { background: radial-gradient(circle at 35% 30%, #b0ffd8, var(--ok)); transform: scale(1.1); }
 
 /* ---------- Mobile compaction ---------- */
 @media (max-width: 560px) {

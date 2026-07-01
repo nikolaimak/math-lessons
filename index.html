@@ -50,6 +50,11 @@
           <span class="gc-name">Days of the Week</span>
           <span class="gc-desc">Hop through the week to find the day</span>
         </button>
+        <button class="game-card" id="play-arrays">
+          <span class="gc-emoji">🔢</span>
+          <span class="gc-name">Dot Arrays</span>
+          <span class="gc-desc">Count rows, columns and totals</span>
+        </button>
       </div>
 
       <label class="sound-toggle">
@@ -191,6 +196,43 @@
       <div class="controls">
         <button class="big-btn ghost" id="wk-hint-btn">💡 Show me</button>
         <button class="big-btn primary hidden" id="wk-next-btn">Next ➜</button>
+      </div>
+    </section>
+
+    <!-- ============ DOT ARRAYS GAME ============ -->
+    <section id="screen-arrays" class="screen hidden">
+      <header class="game-top">
+        <button class="icon-btn" id="ar-home-btn" title="Back home">🏠</button>
+        <div class="hearts" id="ar-hearts" title="Lives"></div>
+        <div class="progress-wrap" title="Stars collected">
+          <div class="progress-bar"><div class="progress-fill" id="ar-progress-fill"></div></div>
+          <div class="star-count">⭐ <span id="ar-star-count">0</span></div>
+        </div>
+        <button class="icon-btn" id="ar-speak-btn" title="Read aloud on/off">🔊</button>
+      </header>
+
+      <div class="helper">
+        <div class="buddy" id="ar-buddy" aria-hidden="true">🔢</div>
+        <div class="bubble" id="ar-bubble">Let's count the dots! 🔢</div>
+      </div>
+
+      <div class="ar-equation">
+        <span id="ar-q-rows" class="ar-given">3</span>
+        <span class="ar-label">rows of</span>
+        <span id="ar-q-cols" class="ar-given">4</span>
+        <span class="ar-label">=</span>
+        <span id="ar-q-result" class="ar-blank">?</span>
+      </div>
+
+      <div class="ar-grid-wrap">
+        <div class="ar-dot-grid" id="ar-dot-grid"></div>
+      </div>
+
+      <div class="quiz-choices" id="ar-choices"></div>
+
+      <div class="controls">
+        <button class="big-btn ghost" id="ar-hint-btn">💡 Show me</button>
+        <button class="big-btn primary hidden" id="ar-next-btn">Next ➜</button>
       </div>
     </section>
 
