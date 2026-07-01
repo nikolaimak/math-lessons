@@ -65,7 +65,7 @@ const BADGES = [
   { id: "soloist", e: "🦸", n: "On My Own", d: "Solve a round with no hints showing" },
   { id: "daytripper", e: "📅", n: "Day Tripper", d: "Finish a Days of the Week game" },
   { id: "timetraveller", e: "⏳", n: "Time Traveller", d: "Solve a 'days ago' question" },
-  { id: "arraychamp", e: "🔢", n: "Array Champion", d: "Finish a Dot Arrays game" }
+  { id: "array-champ", e: "🔢", n: "Array Champion", d: "Finish a Dot Arrays game" }
 ];
 
 /* ---------- On-device storage ---------- */
@@ -1099,7 +1099,7 @@ function arrayNext() {
 
 function finishArraySession() {
   Store.data.sessions++; Store.save();
-  earnBadge("arraychamp");
+  earnBadge("array-champ");
   showAward({
     game: "arrays",
     headline: AR.perfects >= AROUNDS ? "Array ace — perfect! 🔢" : "Multiplication master! 🔢",
