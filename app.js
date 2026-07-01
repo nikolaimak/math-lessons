@@ -64,7 +64,8 @@ const BADGES = [
   { id: "quickthinker", e: "⚡", n: "Quick Thinker", d: "Score 6+ in Star Quiz" },
   { id: "soloist", e: "🦸", n: "On My Own", d: "Solve a round with no hints showing" },
   { id: "daytripper", e: "📅", n: "Day Tripper", d: "Finish a Days of the Week game" },
-  { id: "timetraveller", e: "⏳", n: "Time Traveller", d: "Solve a 'days ago' question" }
+  { id: "timetraveller", e: "⏳", n: "Time Traveller", d: "Solve a 'days ago' question" },
+  { id: "array-champ", e: "🔢", n: "Array Champion", d: "Finish a Dot Arrays game" }
 ];
 
 /* ---------- On-device storage ---------- */
@@ -166,7 +167,7 @@ function makeProblem(wantExchange) {
    =================================================================== */
 const App = { lastGame: "tutor" };
 function show(id) {
-  ["screen-home", "screen-game", "screen-quiz", "screen-weekday", "screen-award"].forEach(s => $(s).classList.add("hidden"));
+  ["screen-home", "screen-game", "screen-quiz", "screen-weekday", "screen-arrays", "screen-award"].forEach(s => $(s).classList.add("hidden"));
   $(id).classList.remove("hidden");
   window.scrollTo(0, 0);
 }
@@ -244,7 +245,8 @@ function startTutorRound() {
   $("ans-ones").textContent = "·"; $("ans-ones").className = "ans-ones";
 
   $("next-btn").classList.add("hidden");
-  $("hint-btn").classList.remove("hidden");
+  if (T.guidance === "guide") $("hint-btn").classList.remove("hidden");
+  else $("hint-btn").classList.add("hidden");
 
   renderTens(); renderOnes();
   introRound();
@@ -707,7 +709,8 @@ function startWeekdayRound() {
   const ans = $("wk-ans"); ans.textContent = "?"; ans.className = "qmark";
   $("wk-center").textContent = "Hop!";
   $("wk-next-btn").classList.add("hidden");
-  $("wk-hint-btn").classList.remove("hidden");
+  if (W.guidance === "guide") $("wk-hint-btn").classList.remove("hidden");
+  else $("wk-hint-btn").classList.add("hidden");
 
   renderWheel();
   introWeekday();
@@ -887,10 +890,232 @@ function weekdayHint() {
 }
 
 /* ===================================================================
+   DOT ARRAYS GAME
+   =================================================================== */
+const AROUNDS = 6;
+const AR = {
+  round: 0, bias: 0, sessionStars: 0, perfects: 0,
+  rows: 3, cols: 4, product: 12, qType: "product", answer: 0,
+  hearts: 3, hadMistake: false, usedHint: false,
+  guidance: "guide", buddy: BUDDIES[0]
+};
+
+function arrayParams(round, bias) {
+  const score = round + bias;
+  let maxR = 4, maxC = 4;
+  if (score >= 3) { maxR = 6; maxC = 6; }
+  if (score >= 5) { maxR = 9; maxC = 9; }
+  return { rows: rnd(2, maxR), cols: rnd(2, maxC) };
+}
+
+function pickArrayQType() {
+  if (AR.guidance === "guide") return "product";
+  return pick(["rows", "cols", "product"]);
+}
+
+function startArrays() {
+  Sound.resume();
+  App.lastGame = "arrays";
+  sessionNewBadges = [];
+  AR.round = 0; AR.sessionStars = 0; AR.perfects = 0;
+  AR.bias = biasFromSessions();
+  $("ar-star-count").textContent = "0";
+  $("ar-progress-fill").style.width = "0%";
+  show("screen-arrays");
+  startArrayRound();
+}
+
+function startArrayRound() {
+  AR.guidance = guidanceLevel(AR.round, AR.bias);
+  AR.buddy = pick(BUDDIES);
+  AR.hearts = 3;
+  AR.hadMistake = false;
+  AR.usedHint = false;
+
+  const p = arrayParams(AR.round, AR.bias);
+  AR.rows = p.rows; AR.cols = p.cols; AR.product = p.rows * p.cols;
+  AR.qType = pickArrayQType();
+  AR.answer = AR.qType === "rows" ? AR.rows : (AR.qType === "cols" ? AR.cols : AR.product);
+
+  $("ar-buddy").textContent = AR.buddy.e;
+  renderHearts("ar-hearts", AR.hearts);
+  renderDotGrid(AR.rows, AR.cols);
+  renderArrayEquation();
+  renderArrayChoices();
+
+  $("ar-next-btn").classList.add("hidden");
+  if (AR.guidance === "guide") $("ar-hint-btn").classList.remove("hidden");
+  else $("ar-hint-btn").classList.add("hidden");
+
+  let msg;
+  if (AR.qType === "rows") {
+    msg = `${AR.buddy.n} here! How many rows of ${AR.cols} dots are there? 🔢`;
+  } else if (AR.qType === "cols") {
+    msg = `${AR.buddy.n} here! How many dots are in each row? 🔢`;
+  } else {
+    msg = `${AR.buddy.n} here! Count all the dots — ${AR.rows} rows of ${AR.cols}. What is the total? 🔢`;
+  }
+  bubble("ar-bubble", msg);
+}
+
+function renderDotGrid(rows, cols) {
+  const grid = $("ar-dot-grid");
+  grid.innerHTML = "";
+  const maxDim = Math.max(rows, cols);
+  const dotSize = Math.max(20, Math.floor(260 / maxDim) - 6);
+  const gap = dotSize >= 28 ? 8 : 5;
+  grid.style.gridTemplateColumns = `repeat(${cols}, ${dotSize}px)`;
+  grid.style.gap = gap + "px";
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const dot = el("div", "ar-dot");
+      dot.style.width = dotSize + "px";
+      dot.style.height = dotSize + "px";
+      dot.dataset.row = r;
+      dot.dataset.col = c;
+      grid.appendChild(dot);
+    }
+  }
+}
+
+function renderArrayEquation() {
+  const rowEl = $("ar-q-rows"), colEl = $("ar-q-cols"), resEl = $("ar-q-result");
+  if (AR.qType === "rows") {
+    rowEl.textContent = "?"; rowEl.className = "ar-blank";
+    colEl.textContent = AR.cols; colEl.className = "ar-given";
+    resEl.textContent = AR.product; resEl.className = "ar-given";
+  } else if (AR.qType === "cols") {
+    rowEl.textContent = AR.rows; rowEl.className = "ar-given";
+    colEl.textContent = "?"; colEl.className = "ar-blank";
+    resEl.textContent = AR.product; resEl.className = "ar-given";
+  } else {
+    rowEl.textContent = AR.rows; rowEl.className = "ar-given";
+    colEl.textContent = AR.cols; colEl.className = "ar-given";
+    resEl.textContent = "?"; resEl.className = "ar-blank";
+  }
+}
+
+function renderArrayChoices() {
+  const ans = AR.answer;
+  let distractors;
+  if (AR.qType === "rows") {
+    distractors = [AR.cols, AR.rows + 1, AR.rows - 1, AR.rows + 2, AR.cols + 1, AR.cols - 1];
+  } else if (AR.qType === "cols") {
+    distractors = [AR.rows, AR.cols + 1, AR.cols - 1, AR.cols + 2, AR.rows + 1, AR.rows - 1];
+  } else {
+    distractors = [
+      AR.rows + AR.cols, AR.product + AR.rows, AR.product - AR.rows,
+      AR.product + AR.cols, AR.product - AR.cols, AR.product + 1, AR.product - 1
+    ];
+  }
+  const set = new Set([ans]);
+  for (const d of distractors) {
+    if (set.size >= 4) break;
+    if (d >= 1 && d <= 100 && d !== ans) set.add(d);
+  }
+  const arr = [...set];
+  while (arr.length < 4) { const r = rnd(1, Math.max(ans + 5, 20)); if (!arr.includes(r)) arr.push(r); }
+  const choices = shuffle(arr.slice(0, 4));
+  const box = $("ar-choices"); box.innerHTML = "";
+  choices.forEach(v => {
+    const b = el("button", "choice"); b.textContent = v;
+    b.addEventListener("click", () => onArrayChoice(v, b));
+    box.appendChild(b);
+  });
+}
+
+function onArrayChoice(val, btn) {
+  const buttons = [...$("ar-choices").children];
+  if (val === AR.answer) {
+    buttons.forEach(b => { b.disabled = true; });
+    btn.classList.add("right");
+    AR.sessionStars++; Store.addStars(1);
+    if (Store.data.totalStars >= 1) earnBadge("first-star");
+    if (Store.data.totalStars >= 15) earnBadge("collector");
+    if (!AR.hadMistake && AR.hearts === 3) AR.perfects++;
+    if (AR.guidance === "solo" && !AR.hadMistake && !AR.usedHint) earnBadge("soloist");
+    $("ar-dot-grid").querySelectorAll(".ar-dot").forEach(d => d.classList.add("ar-correct"));
+    Sound.win(); celebrate(40);
+    bubble("ar-bubble", `Yes! ${AR.rows} rows of ${AR.cols} = ${AR.product}! 🌟`, "cheer");
+    $("ar-hint-btn").classList.add("hidden");
+    $("ar-progress-fill").style.width = Math.round(((AR.round + 1) / AROUNDS) * 100) + "%";
+    $("ar-star-count").textContent = AR.sessionStars;
+    const nb = $("ar-next-btn");
+    nb.classList.remove("hidden");
+    nb.textContent = (AR.round + 1 >= AROUNDS) ? "See my award 🏆" : "Next ➜";
+  } else {
+    btn.classList.add("wrong");
+    btn.disabled = true;
+    AR.hadMistake = true;
+    AR.hearts--;
+    Sound.oops();
+    renderHearts("ar-hearts", AR.hearts);
+    if (AR.hearts <= 0) {
+      buttons.forEach(b => {
+        b.disabled = true;
+        if (Number(b.textContent) === AR.answer) b.classList.add("right");
+        else if (!b.classList.contains("wrong")) b.classList.add("dim");
+      });
+      bubble("ar-bubble", `The answer was ${AR.answer}. ${AR.rows} rows × ${AR.cols} = ${AR.product}. Keep going! 💪`, "oops");
+      $("ar-hint-btn").classList.add("hidden");
+      $("ar-progress-fill").style.width = Math.round(((AR.round + 1) / AROUNDS) * 100) + "%";
+      const nb = $("ar-next-btn");
+      nb.classList.remove("hidden");
+      nb.textContent = (AR.round + 1 >= AROUNDS) ? "See my award 🏆" : "Next ➜";
+    } else {
+      bubble("ar-bubble", `Not quite! ${AR.hearts} ${plural(AR.hearts, "heart", "hearts")} left. Try again!`, "oops");
+    }
+  }
+}
+
+function arrayHint() {
+  Sound.resume();
+  AR.usedHint = true;
+  $("ar-hint-btn").classList.add("hidden");
+  const dots = [...$("ar-dot-grid").querySelectorAll(".ar-dot")];
+  if (AR.qType === "cols") {
+    for (let c = 0; c < AR.cols; c++) {
+      dots.filter(d => parseInt(d.dataset.col) === c).forEach(d => d.classList.add("ar-hint-" + (c % 5)));
+    }
+    bubble("ar-bubble", `Each column is a different colour — count the columns! 🎨`);
+  } else {
+    for (let r = 0; r < AR.rows; r++) {
+      dots.filter(d => parseInt(d.dataset.row) === r).forEach(d => d.classList.add("ar-hint-" + (r % 5)));
+    }
+    if (AR.qType === "rows") {
+      bubble("ar-bubble", `Each row is a different colour — count the rows! 🎨`);
+    } else {
+      bubble("ar-bubble", `${AR.rows} rows, each with ${AR.cols} dots. ${AR.rows} × ${AR.cols} = ? 🎨`);
+    }
+  }
+}
+
+function arrayNext() {
+  Sound.resume();
+  AR.round++;
+  if (AR.round >= AROUNDS) { finishArraySession(); return; }
+  startArrayRound();
+}
+
+function finishArraySession() {
+  Store.data.sessions++; Store.save();
+  earnBadge("array-champ");
+  showAward({
+    game: "arrays",
+    headline: AR.perfects >= AROUNDS ? "Array ace — perfect! 🔢" : "Multiplication master! 🔢",
+    stats: [
+      { b: AR.sessionStars + "/" + AROUNDS, s: "solved" },
+      { b: AR.perfects, s: "perfect" },
+      { b: Store.data.totalStars, s: "total ⭐" }
+    ]
+  });
+}
+
+/* ===================================================================
    AWARD / CERTIFICATE
    =================================================================== */
 function showAward(info) {
-  $("cert-emoji").textContent = info.game === "quiz" ? "⚡" : (info.game === "weekday" ? "📅" : "🏆");
+  $("cert-emoji").textContent = info.game === "quiz" ? "⚡" : (info.game === "weekday" ? "📅" : (info.game === "arrays" ? "🔢" : "🏆"));
   $("cert-headline").textContent = info.headline;
   const stats = $("cert-stats"); stats.innerHTML = "";
   info.stats.forEach(st => {
@@ -998,7 +1223,7 @@ function goHome() {
    INIT
    =================================================================== */
 function syncSpeakBtns() {
-  ["speak-btn", "quiz-speak-btn", "wk-speak-btn"].forEach(id => {
+  ["speak-btn", "quiz-speak-btn", "wk-speak-btn", "ar-speak-btn"].forEach(id => {
     const b = $(id); if (!b) return;
     b.classList.toggle("muted", !Speech.on);
     b.textContent = Speech.on ? "🔊" : "🔇";
@@ -1022,6 +1247,7 @@ function init() {
   $("play-tutor").addEventListener("click", startTutor);
   $("play-quiz").addEventListener("click", startQuiz);
   $("play-weekday").addEventListener("click", startWeekday);
+  $("play-arrays").addEventListener("click", startArrays);
   $("badges-btn").addEventListener("click", openBadges);
   $("badge-close").addEventListener("click", closeBadges);
   $("badge-modal").addEventListener("click", (e) => { if (e.target === $("badge-modal")) closeBadges(); });
@@ -1030,6 +1256,7 @@ function init() {
   $("speak-btn").addEventListener("click", toggleSpeak);
   $("quiz-speak-btn").addEventListener("click", toggleSpeak);
   $("wk-speak-btn").addEventListener("click", toggleSpeak);
+  $("ar-speak-btn").addEventListener("click", toggleSpeak);
 
   $("hint-btn").addEventListener("click", tutorHint);
   $("next-btn").addEventListener("click", tutorNext);
@@ -1038,11 +1265,15 @@ function init() {
   $("wk-hint-btn").addEventListener("click", weekdayHint);
   $("wk-next-btn").addEventListener("click", weekdayNext);
   $("wk-home-btn").addEventListener("click", goHome);
+  $("ar-hint-btn").addEventListener("click", arrayHint);
+  $("ar-next-btn").addEventListener("click", arrayNext);
+  $("ar-home-btn").addEventListener("click", goHome);
 
   $("award-home").addEventListener("click", goHome);
   $("award-again").addEventListener("click", () => {
     if (App.lastGame === "quiz") startQuiz();
     else if (App.lastGame === "weekday") startWeekday();
+    else if (App.lastGame === "arrays") startArrays();
     else startTutor();
   });
 }
