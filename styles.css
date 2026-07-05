@@ -565,6 +565,14 @@ body {
   background: #faf5ff;
 }
 .name-input:focus { border-color: var(--pink); background: #fff; }
+.name-input.input-error { border-color: var(--cross); animation: shake 0.4s; }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
 .name-edit-btn {
   background: none; border: none; cursor: pointer; font-size: 16px;
   padding: 0 0 0 6px; vertical-align: middle; opacity: 0.7;

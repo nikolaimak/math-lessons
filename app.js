@@ -1225,7 +1225,12 @@ function openNameModal() {
 
 function savePlayerName() {
   const name = $("name-input").value.trim();
-  if (!name) return;
+  if (!name) {
+    $("name-input").focus();
+    $("name-input").classList.add("input-error");
+    setTimeout(() => $("name-input").classList.remove("input-error"), 600);
+    return;
+  }
   Store.data.playerName = name;
   Store.save();
   $("name-modal").classList.add("hidden");
