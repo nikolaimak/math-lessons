@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Natasha's Subtraction Magic ✨🦄</title>
+  <title>Subtraction Magic ✨🦄</title>
   <meta name="description" content="A magical way to learn 2-digit subtraction with tens and ones." />
   <meta name="theme-color" content="#fde2f3" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦄</text></svg>" />
@@ -26,8 +26,9 @@
     <section id="screen-home" class="screen card">
       <div class="unicorn-big" aria-hidden="true"></div>
       <h1 class="title">Subtraction Magic</h1>
-      <p class="subtitle">Hi <span class="name">Natasha</span>! Pick a game and become a
-        <strong>Subtraction Star</strong>! 🦄</p>
+      <p class="subtitle">Hi <span class="name" id="player-name">there</span>! Pick a game and become a
+        <strong>Subtraction Star</strong>! 🦄
+        <button class="name-edit-btn" id="name-edit-btn" title="Change name" aria-label="Change name">✏️</button></p>
 
       <div class="progress-strip">
         <div class="ps-item" title="Stars you have collected">⭐ <span id="home-stars">0</span></div>
@@ -242,7 +243,7 @@
         <div class="cert-shine"></div>
         <div class="cert-emoji" id="cert-emoji">🏆</div>
         <div class="cert-ribbon">Certificate of Awesomeness</div>
-        <h2 class="cert-name">Natasha</h2>
+        <h2 class="cert-name" id="cert-name"></h2>
         <p class="cert-headline" id="cert-headline">You did amazing!</p>
         <div class="cert-stats" id="cert-stats"></div>
         <div class="cert-badges" id="cert-badges"></div>
@@ -254,6 +255,17 @@
       </div>
     </section>
   </main>
+
+  <!-- Name entry modal -->
+  <div class="modal hidden" id="name-modal">
+    <div class="modal-card name-modal-card">
+      <div class="unicorn-name" aria-hidden="true">🦄</div>
+      <h2 class="modal-title">What's your name?</h2>
+      <input class="name-input" id="name-input" type="text" maxlength="20"
+        placeholder="Enter your name" autocomplete="off" />
+      <button class="big-btn primary" id="name-save-btn">Let's go! ✨</button>
+    </div>
+  </div>
 
   <!-- Badges modal -->
   <div class="modal hidden" id="badge-modal">
