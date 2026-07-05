@@ -1,9 +1,10 @@
 "use strict";
 
 /* ===================================================================
-   Subtraction Magic — v2
-   - Tens & Ones tutor with adaptive guidance, hearts and exchanging
+   Math Lessons — v2
+   - Tens & Ones subtraction tutor with adaptive guidance and hearts
    - Star Quiz quick-fire game
+   - Array multiplication explorer
    - On-device progress, badges and an end-of-session certificate
    =================================================================== */
 
