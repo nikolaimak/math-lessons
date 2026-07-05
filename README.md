@@ -1,8 +1,7 @@
-# Math Lessons — Subtraction for Natasha 🦄
+# Math Lessons — Subtraction Magic 🦄
 
 An interactive web app that teaches **2-digit subtraction** using the place-value
-(Tens / Ones) **exchange method** — the same way it's taught in primary school, and
-the method shown in Natasha's own drawing.
+(Tens / Ones) **exchange method** — the same way it's taught in primary school.
 
 **▶️ Play it here: https://nikolaimak.github.io/math-lessons/**
 

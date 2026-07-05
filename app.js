@@ -1,7 +1,7 @@
 "use strict";
 
 /* ===================================================================
-   Natasha's Subtraction Magic — v2
+   Subtraction Magic — v2
    - Tens & Ones tutor with adaptive guidance, hearts and exchanging
    - Star Quiz quick-fire game
    - On-device progress, badges and an end-of-session certificate
@@ -71,7 +71,7 @@ const BADGES = [
 /* ---------- On-device storage ---------- */
 const Store = {
   KEY: "natasha-math-v1",
-  data: { totalStars: 0, sessions: 0, quizPlays: 0, quizBest: 0, badges: {} },
+  data: { totalStars: 0, sessions: 0, quizPlays: 0, quizBest: 0, badges: {}, playerName: "" },
   load() {
     try { const s = localStorage.getItem(this.KEY); if (s) this.data = Object.assign(this.data, JSON.parse(s)); }
     catch (e) { /* ignore */ }
@@ -1116,6 +1116,7 @@ function finishArraySession() {
    =================================================================== */
 function showAward(info) {
   $("cert-emoji").textContent = info.game === "quiz" ? "⚡" : (info.game === "weekday" ? "📅" : (info.game === "arrays" ? "🔲" : "🏆"));
+  $("cert-name").textContent = Store.data.playerName || "there";
   $("cert-headline").textContent = info.headline;
   const stats = $("cert-stats"); stats.innerHTML = "";
   info.stats.forEach(st => {
@@ -1134,7 +1135,7 @@ function showAward(info) {
   $("cert-date").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
   show("screen-award");
   Sound.fanfare(); celebrate(80);
-  Speech.say("Congratulations Natasha! " + info.headline);
+  Speech.say("Congratulations " + (Store.data.playerName || "there") + "! " + info.headline);
 }
 
 /* ===================================================================
@@ -1196,6 +1197,9 @@ function buildFloaties() {
 function renderHome() {
   $("home-stars").textContent = Store.data.totalStars;
   $("home-badges-count").textContent = Store.badgeCount();
+  const name = Store.data.playerName || "there";
+  $("player-name").textContent = name;
+  $("cert-name").textContent = name;
 }
 
 function openBadges() {
@@ -1212,6 +1216,21 @@ function openBadges() {
   $("badge-modal").classList.remove("hidden");
 }
 function closeBadges() { $("badge-modal").classList.add("hidden"); }
+
+function openNameModal() {
+  $("name-input").value = Store.data.playerName || "";
+  $("name-modal").classList.remove("hidden");
+  $("name-input").focus();
+}
+
+function savePlayerName() {
+  const name = $("name-input").value.trim();
+  if (!name) return;
+  Store.data.playerName = name;
+  Store.save();
+  $("name-modal").classList.add("hidden");
+  renderHome();
+}
 
 function goHome() {
   Speech.cancel();
@@ -1252,6 +1271,10 @@ function init() {
   $("badge-close").addEventListener("click", closeBadges);
   $("badge-modal").addEventListener("click", (e) => { if (e.target === $("badge-modal")) closeBadges(); });
 
+  $("name-edit-btn").addEventListener("click", openNameModal);
+  $("name-save-btn").addEventListener("click", savePlayerName);
+  $("name-input").addEventListener("keydown", (e) => { if (e.key === "Enter") savePlayerName(); });
+
   $("speak-toggle").addEventListener("change", (e) => { Speech.on = e.target.checked; if (!Speech.on) Speech.cancel(); syncSpeakBtns(); });
   $("speak-btn").addEventListener("click", toggleSpeak);
   $("quiz-speak-btn").addEventListener("click", toggleSpeak);
@@ -1276,6 +1299,8 @@ function init() {
     else if (App.lastGame === "arrays") startArrays();
     else startTutor();
   });
+
+  if (!Store.data.playerName) openNameModal();
 }
 
 document.addEventListener("DOMContentLoaded", init);
